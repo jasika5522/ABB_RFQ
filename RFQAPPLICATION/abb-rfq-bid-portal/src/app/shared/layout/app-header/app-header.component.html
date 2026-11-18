@@ -1,0 +1,19 @@
+<header class="app-header">
+  <h1 class="logo">
+    <span class="badge">ABB</span> RFQ Portal
+  </h1>
+  <div class="header-actions">
+    @if (toggleSidebar) {
+      <button type="button" class="btn btn-outline menu-toggle" (click)="toggleSidebar()">
+        Menu
+      </button>
+    }
+    <div class="user-area">
+      <div class="user-meta">
+        <span class="name">{{ userName }}</span>
+        <span class="role">{{ userRole }}</span>
+      </div>
+      <button type="button" class="btn btn-primary" (click)="logout()">Logout</button>
+    </div>
+  </div>
+</header>

@@ -1,1 +1,133 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --color-primary: #0b2d4d;
+  --color-primary-dark: #081f36;
+  --color-secondary: #2f80ed;
+  --color-secondary-light: #e8f2fd;
+  --color-bg: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-border: #d9e1ec;
+  --color-text: #1f2933;
+  --color-text-muted: #5c6b7a;
+  --color-danger: #c62828;
+  --shadow-sm: 0 1px 3px rgba(11, 45, 77, 0.08);
+  --radius: 8px;
+  --sidebar-width: 260px;
+  --header-height: 64px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+a {
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--color-secondary-light);
+  color: var(--color-primary);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.form-field label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+  outline: 2px solid var(--color-secondary-light);
+  border-color: var(--color-secondary);
+}
+
+.form-error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+
+.error-banner {
+  background: #fdecea;
+  color: var(--color-danger);
+  border: 1px solid #f5c2c0;
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.password-toggle-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.password-toggle-row input {
+  flex: 1;
+}

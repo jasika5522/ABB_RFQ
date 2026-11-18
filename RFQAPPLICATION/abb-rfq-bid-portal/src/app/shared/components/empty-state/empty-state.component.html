@@ -1,0 +1,9 @@
+<div class="empty-state card">
+  <h2>{{ title }}</h2>
+  <p>{{ message }}</p>
+  @if (actionLabel) {
+    <button type="button" class="btn btn-secondary" disabled [title]="'Available after API integration'">
+      {{ actionLabel }}
+    </button>
+  }
+</div>

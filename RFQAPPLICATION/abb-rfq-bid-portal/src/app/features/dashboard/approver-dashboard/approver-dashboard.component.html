@@ -1,0 +1,7 @@
+<app-page-header title="Approver Dashboard"></app-page-header>
+
+<div class="stats-grid">
+  @for (stat of stats; track stat.label) {
+    <app-stat-card [label]="stat.label" [value]="stat.value"></app-stat-card>
+  }
+</div>

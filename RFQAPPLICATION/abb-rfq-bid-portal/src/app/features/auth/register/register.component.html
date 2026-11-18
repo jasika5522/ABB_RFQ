@@ -1,0 +1,77 @@
+<h2>Supplier registration</h2>
+<p class="subtitle">Create your supplier account</p>
+
+@if (errorMessage) {
+  <div class="error-banner" role="alert">{{ errorMessage }}</div>
+}
+
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <div class="form-field">
+    <label for="fullName">Full name</label>
+    <input id="fullName" formControlName="fullName" />
+    @if (form.controls.fullName.touched && form.controls.fullName.invalid) {
+      <span class="form-error">Full name is required (2–150 characters).</span>
+    }
+  </div>
+
+  <div class="form-field">
+    <label for="email">Email</label>
+    <input id="email" type="email" formControlName="email" />
+    @if (form.controls.email.touched && form.controls.email.hasError('required')) {
+      <span class="form-error">Email is required.</span>
+    }
+    @if (form.controls.email.touched && form.controls.email.hasError('email')) {
+      <span class="form-error">Enter a valid email address.</span>
+    }
+  </div>
+
+  <div class="form-field">
+    <label for="password">Password</label>
+    <div class="password-toggle-row">
+      <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password" />
+      <button type="button" class="btn btn-outline" (click)="togglePassword()">
+        {{ showPassword ? 'Hide' : 'Show' }}
+      </button>
+    </div>
+    @if (form.controls.password.touched && form.controls.password.invalid) {
+      <span class="form-error">Password must be at least 8 characters.</span>
+    }
+  </div>
+
+  <div class="form-field">
+    <label for="companyName">Company name</label>
+    <input id="companyName" formControlName="companyName" />
+    @if (form.controls.companyName.touched && form.controls.companyName.invalid) {
+      <span class="form-error">Company name is required.</span>
+    }
+  </div>
+
+  <div class="form-field">
+    <label for="registrationNumber">Registration number</label>
+    <input id="registrationNumber" formControlName="registrationNumber" />
+    @if (form.controls.registrationNumber.touched && form.controls.registrationNumber.invalid) {
+      <span class="form-error">Registration number is required.</span>
+    }
+  </div>
+
+  <div class="form-field">
+    <label for="contactPerson">Contact person (optional)</label>
+    <input id="contactPerson" formControlName="contactPerson" />
+  </div>
+
+  <div class="form-field">
+    <label for="phone">Phone (optional)</label>
+    <input id="phone" formControlName="phone" />
+    @if (form.controls.phone.touched && form.controls.phone.hasError('pattern')) {
+      <span class="form-error">Enter a valid phone number.</span>
+    }
+  </div>
+
+  <button type="submit" class="btn btn-primary full-width" [disabled]="submitting">
+    {{ submitting ? 'Registering...' : 'Register' }}
+  </button>
+</form>
+
+<p class="footer-link">
+  Already registered? <a routerLink="/login">Back to login</a>
+</p>

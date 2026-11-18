@@ -1,0 +1,13 @@
+.empty-state {
+  text-align: center;
+  max-width: 520px;
+}
+
+.empty-state h2 {
+  margin-top: 0;
+  font-size: 1.2rem;
+}
+
+.empty-state p {
+  color: var(--color-text-muted);
+}

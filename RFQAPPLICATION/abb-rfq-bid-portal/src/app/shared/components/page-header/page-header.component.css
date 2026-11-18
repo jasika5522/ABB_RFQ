@@ -1,0 +1,22 @@
+.page-header {
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  color: var(--color-primary);
+}
+
+.breadcrumbs {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.breadcrumbs .sep {
+  margin: 0 0.4rem;
+}
+
+.breadcrumbs .current {
+  color: var(--color-text);
+}

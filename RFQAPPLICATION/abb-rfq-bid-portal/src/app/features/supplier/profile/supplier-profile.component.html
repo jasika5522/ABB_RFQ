@@ -1,0 +1,16 @@
+<app-page-header title="My Profile"></app-page-header>
+
+@if (user) {
+  <div class="profile card">
+    <dl>
+      <dt>Name</dt>
+      <dd>{{ user.fullName }}</dd>
+      <dt>Email</dt>
+      <dd>{{ user.email }}</dd>
+      <dt>Role</dt>
+      <dd>{{ user.role }}</dd>
+    </dl>
+  </div>
+} @else {
+  <app-empty-state title="Profile unavailable" message="Sign in to view your profile."></app-empty-state>
+}

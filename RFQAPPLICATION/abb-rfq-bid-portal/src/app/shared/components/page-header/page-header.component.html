@@ -1,0 +1,15 @@
+<div class="page-header">
+  @if (breadcrumbs.length) {
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      @for (crumb of breadcrumbs; track crumb.label; let last = $last) {
+        @if (!last && crumb.route) {
+          <a [routerLink]="crumb.route">{{ crumb.label }}</a>
+          <span class="sep">/</span>
+        } @else {
+          <span class="current">{{ crumb.label }}</span>
+        }
+      }
+    </nav>
+  }
+  <h1>{{ title }}</h1>
+</div>

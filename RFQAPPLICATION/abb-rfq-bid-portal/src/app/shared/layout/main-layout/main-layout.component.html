@@ -1,0 +1,14 @@
+<div class="shell">
+  <app-app-header
+    [userName]="user?.fullName ?? ''"
+    [userRole]="user?.role ?? ''"
+    [sidebarOpen]="sidebarOpen"
+    [toggleSidebar]="toggleSidebar.bind(this)"
+  ></app-app-header>
+  <div class="body">
+    <app-app-sidebar [open]="sidebarOpen"></app-app-sidebar>
+    <main class="content">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>

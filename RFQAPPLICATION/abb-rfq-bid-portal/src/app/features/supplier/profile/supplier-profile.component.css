@@ -1,0 +1,15 @@
+.profile dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 0.5rem 1rem;
+}
+
+.profile dt {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.profile dd {
+  margin: 0;
+}
