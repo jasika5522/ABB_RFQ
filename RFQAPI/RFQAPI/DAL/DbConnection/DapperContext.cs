@@ -1,21 +1,16 @@
 ﻿using Npgsql;
-using System.Data;
 
-namespace RFQAPI.DAL.DbConnection
+namespace RFQAPI.DAL.DbConnection;
+
+public class DapperContext
 {
-    public class DapperContext
+    private readonly string _connectionString;
+
+    public DapperContext(IConfiguration configuration)
     {
-        private readonly IConfiguration _configuration;
-        private readonly string _connectionString;
-
-        public DapperContext(IConfiguration configuration)
-        {
-            _configuration = configuration;
-            _connectionString = _configuration.GetConnectionString("RfqDb")
-                ?? throw new InvalidOperationException("Connection string not found");
-        }
-
-        public IDbConnection CreateConnection()
-            => new NpgsqlConnection(_connectionString);
+        _connectionString = configuration.GetConnectionString("RfqDb")
+            ?? throw new InvalidOperationException("Connection string 'RfqDb' was not found.");
     }
+
+    public NpgsqlConnection CreateConnection() => new(_connectionString);
 }

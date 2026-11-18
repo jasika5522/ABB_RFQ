@@ -1,6 +1,263 @@
 @RFQAPI_HostAddress = http://localhost:5013
+@token = 
 
-GET {{RFQAPI_HostAddress}}/weatherforecast/
-Accept: application/json
+### Register supplier (creates users + suppliers in one transaction)
+POST {{RFQAPI_HostAddress}}/api/auth/register
+Content-Type: application/json
 
-###
+{
+  "fullName": "Jane Doe",
+  "email": "supplier@example.com",
+  "password": "Password123!",
+  "companyName": "Acme Supplies Ltd",
+  "registrationNumber": "REG-10001",
+  "contactPerson": "Jane Doe",
+  "phone": "+15551234567"
+}
+
+### Login
+POST {{RFQAPI_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "supplier@example.com",
+  "password": "Password123!"
+}
+
+### Get logged-in user
+GET {{RFQAPI_HostAddress}}/api/users/me
+Authorization: Bearer {{token}}
+
+### List users – Approver only
+GET {{RFQAPI_HostAddress}}/api/users?page=1&pageSize=20
+Authorization: Bearer {{token}}
+
+### Activate/deactivate user – Approver only
+PATCH {{RFQAPI_HostAddress}}/api/users/1/active
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+### Get my supplier profile – Supplier only
+GET {{RFQAPI_HostAddress}}/api/suppliers/me
+Authorization: Bearer {{token}}
+
+### Update my supplier profile – Supplier only
+PUT {{RFQAPI_HostAddress}}/api/suppliers/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyName": "Acme Supplies International",
+  "contactPerson": "Jane Doe",
+  "phone": "+15559876543"
+}
+
+### List suppliers – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/suppliers?page=1&pageSize=20&approvalStatus=Pending&companyName=Acme
+Authorization: Bearer {{token}}
+
+### Get supplier by ID – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/suppliers/1
+Authorization: Bearer {{token}}
+
+### Review supplier (approve/suspend) – ProcurementOfficer only
+PATCH {{RFQAPI_HostAddress}}/api/suppliers/1/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "approvalStatus": "Approved"
+}
+
+### Create RFQ (Draft) – ProcurementOfficer only
+POST {{RFQAPI_HostAddress}}/api/rfqs
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "rfqNumber": "RFQ-2026-001",
+  "title": "Industrial Motors Procurement",
+  "description": "Annual motors and drives requirement",
+  "currencyCode": "USD",
+  "items": [
+    {
+      "itemName": "3-Phase Induction Motor 5HP",
+      "description": "IE3 efficiency",
+      "quantity": 25,
+      "unit": "EA"
+    },
+    {
+      "itemName": "Variable Frequency Drive",
+      "description": "5HP matched",
+      "quantity": 25,
+      "unit": "EA"
+    },
+    {
+      "itemName": "Mounting Kit",
+      "quantity": 25,
+      "unit": "SET"
+    }
+  ]
+}
+
+### Update draft RFQ – ProcurementOfficer (creator only)
+PUT {{RFQAPI_HostAddress}}/api/rfqs/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Industrial Motors Procurement – Rev A",
+  "description": "Updated quantities for plant expansion",
+  "currencyCode": "USD",
+  "items": [
+    {
+      "itemName": "3-Phase Induction Motor 5HP",
+      "description": "IE3 efficiency",
+      "quantity": 30,
+      "unit": "EA"
+    },
+    {
+      "itemName": "Variable Frequency Drive",
+      "quantity": 30,
+      "unit": "EA"
+    }
+  ]
+}
+
+### Get RFQ by ID – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs/1
+Authorization: Bearer {{token}}
+
+### List RFQs – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs?page=1&pageSize=20&status=Draft&rfqNumber=RFQ-2026&title=Motors
+Authorization: Bearer {{token}}
+
+### Create round 1 (RFQ must be Draft) – ProcurementOfficer
+POST {{RFQAPI_HostAddress}}/api/rfqs/1/rounds
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "deadline": "2026-12-31T23:59:59Z"
+}
+
+### Publish round – ProcurementOfficer
+PATCH {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/publish
+Authorization: Bearer {{token}}
+
+### Close round – ProcurementOfficer
+PATCH {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/close
+Authorization: Bearer {{token}}
+
+### List rounds – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs/1/rounds
+Authorization: Bearer {{token}}
+
+### Get round by ID – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1
+Authorization: Bearer {{token}}
+
+### Create subsequent round (RFQ + latest round must be Evaluated) – ProcurementOfficer
+# After Module 6 sets Evaluated, example:
+POST {{RFQAPI_HostAddress}}/api/rfqs/1/rounds
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "deadline": "2027-03-31T18:00:00Z"
+}
+
+### Submit bid (approved supplier, published round, before deadline)
+POST {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/bids
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "rfqItemId": 1, "unitPrice": 1250.50 },
+    { "rfqItemId": 2, "unitPrice": 850.00 },
+    { "rfqItemId": 3, "unitPrice": 45.25 }
+  ]
+}
+
+### Withdraw bid
+PATCH {{RFQAPI_HostAddress}}/api/bids/1/withdraw
+Authorization: Bearer {{token}}
+
+### My bids (paginated)
+GET {{RFQAPI_HostAddress}}/api/bids/me?page=1&pageSize=20&rfqId=1&status=Submitted
+Authorization: Bearer {{token}}
+
+### My bid details
+GET {{RFQAPI_HostAddress}}/api/bids/1
+Authorization: Bearer {{token}}
+
+### Evaluate round (RFQ + round Closed, submitted bids) – ProcurementOfficer
+POST {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/evaluate
+Authorization: Bearer {{token}}
+
+### Get evaluation results – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/evaluation
+Authorization: Bearer {{token}}
+
+### Get evaluation detail for a bid – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/evaluation/1
+Authorization: Bearer {{token}}
+
+### Approve evaluation (unique lowest rank) – Approver only
+POST {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/evaluation/decision
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "decision": "Approved",
+  "reason": null
+}
+
+### Reject tied evaluation – Approver only
+POST {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/evaluation/decision
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "decision": "Rejected",
+  "reason": "Multiple suppliers share the lowest bid price. A new bidding round is required."
+}
+
+### Get evaluation decision (or Pending) – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/evaluation/decision
+Authorization: Bearer {{token}}
+
+### Create award (after EvaluationApproved) – Approver only
+POST {{RFQAPI_HostAddress}}/api/rfqs/1/rounds/1/award
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "bidId": 1,
+  "awardComment": "Approved based on the completed evaluation and lowest evaluated bid."
+}
+
+### Get award by RFQ – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/rfqs/1/award
+Authorization: Bearer {{token}}
+
+### List awards – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/awards?page=1&pageSize=20&rfqNumber=RFQ-2026&companyName=Acme
+Authorization: Bearer {{token}}
+
+### Audit logs (paginated + filters) – ProcurementOfficer or Approver
+GET {{RFQAPI_HostAddress}}/api/audit-logs?page=1&pageSize=10&action=RfqAwarded&entityType=Rfq&entityId=1&userId=2&fromDate=2026-01-01T00:00:00Z&toDate=2026-12-31T23:59:59Z
+Authorization: Bearer {{token}}
+
+### Audit log by ID
+GET {{RFQAPI_HostAddress}}/api/audit-logs/1
+Authorization: Bearer {{token}}
+
+### Audit history for entity
+GET {{RFQAPI_HostAddress}}/api/audit-logs/entity/RfqRound/1?page=1&pageSize=10
+Authorization: Bearer {{token}}
