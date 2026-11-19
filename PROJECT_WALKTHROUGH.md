@@ -262,24 +262,6 @@ Content-Type: application/json
 
 More examples: `RFQAPI/RFQAPI/RFQAPI.http`.
 
----
 
-## F. Interview discussion points
-
-| Question | Short answer |
-|----------|----------------|
-| Why Dapper instead of EF Core? | Required by spec; SQL visibility for PostgreSQL indexes, composite FKs, and `get_ranked_bids`. |
-| Why PostgreSQL? | Strong constraints, partial unique indexes, window functions for ranking, JSONB audit payloads. |
-| How is bid submission atomic? | Single transaction: bid + items + audit; rollback on failure or duplicate. |
-| How are concurrent duplicate bids prevented? | Partial unique index + transaction; second insert → **409**. |
-| How is the deadline enforced? | `BidDeadlineRules` strict future check before insert/withdraw. |
-| How are bid amounts protected? | No PO bid API pre-evaluation; supplier queries scoped by `supplier_id`; evaluation after close only. |
-| How are ties handled? | `RANK()` shares rank 1; approver **rejects** with reason; new round—no rank-2 auto award. |
-| How is the winner selected? | Approver explicitly passes `bidId` on award after **EvaluationApproved** and rank-1 uniqueness checks. |
-| How would you scale? | Stateless API behind load balancer, connection pooling, read replicas for audit/reporting, async notifications. |
-| Production improvements? | Vault secrets, integration tests, notifications, MFA, observability, E2E tests. |
-| Cursor AI usage? | Assisted coding/docs/tests; validated via builds, 14 xUnit tests, manual E2E, Swagger—not blindly trusted. |
-
----
 
 **Related docs:** [README.md](README.md) (full reference), [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) (architecture rationale), [database/README.md](database/README.md) (schema detail).
