@@ -1,0 +1,78 @@
+<app-page-header
+  title="Award Management"
+  [breadcrumbs]="[
+    { label: 'Approver', route: '/approver/dashboard' },
+    { label: 'Awards' }
+  ]"
+></app-page-header>
+
+<div class="toolbar">
+  <form [formGroup]="filters" class="filter-row" (ngSubmit)="applyFilters()">
+    <input type="search" placeholder="RFQ number" formControlName="rfqNumber" aria-label="RFQ number" />
+    <input type="search" placeholder="Company name" formControlName="companyName" aria-label="Company name" />
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear</button>
+  </form>
+  <a routerLink="/approver/evaluations" class="btn btn-primary">Review evaluations</a>
+</div>
+
+@if (loading) {
+  <p class="loading" role="status">Loading awards…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state title="No awards have been issued yet" message="Awards appear here after an approved evaluation with a unique lowest bid is awarded." />
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="card table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>RFQ</th>
+          <th>Title</th>
+          <th>Supplier</th>
+          <th>Bid</th>
+          <th class="num">Total</th>
+          <th>Awarded</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (award of items; track award.awardId) {
+          <tr>
+            <td>{{ award.awardId }}</td>
+            <td>{{ award.rfqNumber }}</td>
+            <td>{{ award.rfqTitle }}</td>
+            <td>{{ award.companyName }}</td>
+            <td>{{ award.bidId }}</td>
+            <td class="num">
+              {{ award.awardedBidTotalPrice | currency: award.currencyCode : 'symbol' : '1.2-2' }}
+            </td>
+            <td>{{ award.awardedAt | date: 'medium' }}</td>
+            <td>
+              <a class="btn btn-secondary" [routerLink]="['/approver/awards', award.rfqId]">Details</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <span>Page {{ page }} of {{ totalPages }} ({{ totalCount }} total)</span>
+    <div class="pagination-actions">
+      <button type="button" class="btn btn-outline" (click)="loadPage(page - 1)" [disabled]="page <= 1">
+        Previous
+      </button>
+      <button type="button" class="btn btn-outline" (click)="loadPage(page + 1)" [disabled]="page >= totalPages">
+        Next
+      </button>
+    </div>
+  </div>
+}

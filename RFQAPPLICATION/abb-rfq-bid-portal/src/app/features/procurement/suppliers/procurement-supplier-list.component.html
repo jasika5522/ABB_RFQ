@@ -1,0 +1,103 @@
+<app-page-header
+  title="Supplier Management"
+  [breadcrumbs]="[
+    { label: 'Procurement', route: '/procurement/dashboard' },
+    { label: 'Suppliers' }
+  ]"
+></app-page-header>
+
+<div class="toolbar">
+  <form [formGroup]="filters" class="filter-row" (ngSubmit)="applyFilters()">
+    <input
+      type="search"
+      placeholder="Company name"
+      formControlName="companyName"
+      aria-label="Company name"
+    />
+    <select formControlName="approvalStatus" aria-label="Approval status">
+      <option value="">All statuses</option>
+      @for (s of statusFilters; track s) {
+        @if (s) {
+          <option [value]="s">{{ s }}</option>
+        }
+      }
+    </select>
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear</button>
+  </form>
+  <div class="quick-filters">
+    <button type="button" class="btn btn-outline" (click)="quickFilter('Pending')">Pending</button>
+    <button type="button" class="btn btn-outline" (click)="quickFilter('Approved')">Approved</button>
+    <button type="button" class="btn btn-outline" (click)="quickFilter('Suspended')">Suspended</button>
+  </div>
+</div>
+
+@if (loading) {
+  <p class="loading" role="status">Loading suppliers…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <button type="button" class="btn btn-secondary" (click)="loadPage(page)">Retry</button>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state
+    title="No suppliers found"
+    message="Registered suppliers will appear here. Try adjusting filters."
+  />
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="card table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Reg. number</th>
+          <th>Contact</th>
+          <th>Phone</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Registered</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of items; track s.supplierId) {
+          <tr>
+            <td>{{ s.companyName }}</td>
+            <td>{{ s.registrationNumber }}</td>
+            <td>{{ s.contactPerson || '—' }}</td>
+            <td>{{ s.phone || '—' }}</td>
+            <td>{{ s.userEmail }}</td>
+            <td><span [class]="statusClass(s.approvalStatus)">{{ s.approvalStatus }}</span></td>
+            <td>{{ s.createdAt | date: 'mediumDate' }}</td>
+            <td>
+              <a class="btn btn-secondary" [routerLink]="['/procurement/suppliers', s.supplierId]">
+                View details
+              </a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <span>Page {{ page }} of {{ totalPages }} ({{ totalCount }} total)</span>
+    <div class="pagination-actions">
+      <button type="button" class="btn btn-outline" (click)="loadPage(page - 1)" [disabled]="page <= 1">
+        Previous
+      </button>
+      <button
+        type="button"
+        class="btn btn-outline"
+        (click)="loadPage(page + 1)"
+        [disabled]="page >= totalPages"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+}

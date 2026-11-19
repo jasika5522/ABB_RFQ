@@ -64,25 +64,12 @@ public class EvaluationRepository : IEvaluationRepository
                 return null;
             }
 
-            if (!string.Equals(rfqRow.Status, RfqStatuses.Closed, StringComparison.Ordinal))
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw new ApiException("The RFQ must be in Closed status before evaluation.", StatusCodes.Status400BadRequest);
-            }
-
-            if (!string.Equals(roundRow.Status, RoundStatuses.Closed, StringComparison.Ordinal))
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw new ApiException("Only closed rounds can be evaluated.", StatusCodes.Status400BadRequest);
-            }
-
             var alreadyEvaluated = await connection.ExecuteScalarAsync<bool>(
                 new CommandDefinition(
                     """
                     SELECT EXISTS (
                         SELECT 1
                         FROM bid_evaluations be
-                        INNER JOIN bids b ON b.bid_id = be.bid_id
                         WHERE be.round_id = @RoundId AND be.rfq_id = @RfqId
                     )
                     """,
@@ -93,7 +80,27 @@ public class EvaluationRepository : IEvaluationRepository
             if (alreadyEvaluated)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                throw new ApiException("This round has already been evaluated.", StatusCodes.Status409Conflict);
+                var existing = await GetExistingEvaluateRoundResponseAsync(rfqId, roundId, cancellationToken);
+                if (existing is null)
+                {
+                    throw new ApiException(
+                        "Evaluation data is missing for this evaluated round.",
+                        StatusCodes.Status500InternalServerError);
+                }
+
+                return existing;
+            }
+
+            if (!string.Equals(rfqRow.Status, RfqStatuses.Closed, StringComparison.Ordinal))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw new ApiException("The RFQ must be in Closed status before evaluation.", StatusCodes.Status400BadRequest);
+            }
+
+            if (!string.Equals(roundRow.Status, RoundStatuses.Closed, StringComparison.Ordinal))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw new ApiException("Only closed rounds can be evaluated.", StatusCodes.Status400BadRequest);
             }
 
             var incompleteBidId = await connection.QuerySingleOrDefaultAsync<long?>(
@@ -204,7 +211,7 @@ public class EvaluationRepository : IEvaluationRepository
             var lowestPrice = rankedBids.Where(r => r.RankPosition == lowestRank).Min(r => r.TotalPrice);
             var isTied = lowestRankCount > 1;
 
-            var evaluatedAt = await connection.ExecuteScalarAsync<DateTimeOffset>(
+            var evaluatedAtValue = await connection.ExecuteScalarAsync(
                 new CommandDefinition(
                     """
                     SELECT MAX(evaluated_at)
@@ -214,6 +221,8 @@ public class EvaluationRepository : IEvaluationRepository
                     new { RoundId = roundId, RfqId = rfqId },
                     transaction,
                     cancellationToken: cancellationToken));
+
+            var evaluatedAt = ToDateTimeOffset(evaluatedAtValue);
 
             await AuditLogHelper.InsertAsync(
                 connection,
@@ -322,6 +331,23 @@ public class EvaluationRepository : IEvaluationRepository
 
         if (bids.Count == 0)
         {
+            const string roundStatusSql = """
+                SELECT status
+                FROM rfq_rounds
+                WHERE round_id = @RoundId AND rfq_id = @RfqId
+                """;
+
+            var roundStatus = await connection.ExecuteScalarAsync<string?>(
+                new CommandDefinition(roundStatusSql, new { RfqId = rfqId, RoundId = roundId },
+                    cancellationToken: cancellationToken));
+
+            if (string.Equals(roundStatus, RoundStatuses.Evaluated, StringComparison.Ordinal))
+            {
+                throw new ApiException(
+                    "Evaluation data is missing for this evaluated round.",
+                    StatusCodes.Status500InternalServerError);
+            }
+
             return null;
         }
 
@@ -425,6 +451,69 @@ public class EvaluationRepository : IEvaluationRepository
         };
     }
 
+    private async Task<EvaluateRoundResponse?> GetExistingEvaluateRoundResponseAsync(
+        long rfqId,
+        long roundId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+                rf.rfq_id AS RfqId,
+                rf.rfq_number AS RfqNumber,
+                rf.currency_code AS CurrencyCode,
+                rr.round_id AS RoundId,
+                rr.round_number AS RoundNumber,
+                be.total_price AS TotalPrice,
+                be.rank_position AS RankPosition,
+                be.evaluated_at AS EvaluatedAt
+            FROM bid_evaluations be
+            INNER JOIN rfqs rf ON rf.rfq_id = be.rfq_id
+            INNER JOIN rfq_rounds rr ON rr.round_id = be.round_id AND rr.rfq_id = be.rfq_id
+            WHERE be.rfq_id = @RfqId AND be.round_id = @RoundId
+            """;
+
+        await using var connection = _context.CreateConnection();
+        var rows = (await connection.QueryAsync<ExistingEvaluationRow>(
+            new CommandDefinition(sql, new { RfqId = rfqId, RoundId = roundId }, cancellationToken: cancellationToken)))
+            .ToList();
+
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var first = rows[0];
+        var lowestRank = rows.Min(r => r.RankPosition);
+        var lowestRankRows = rows.Where(r => r.RankPosition == lowestRank).ToList();
+        var evaluatedAt = rows.Max(r => ToDateTimeOffset(r.EvaluatedAt));
+
+        return new EvaluateRoundResponse
+        {
+            RfqId = first.RfqId,
+            RfqNumber = first.RfqNumber,
+            RoundId = first.RoundId,
+            RoundNumber = first.RoundNumber,
+            CurrencyCode = first.CurrencyCode,
+            EvaluatedAt = evaluatedAt,
+            EvaluatedBidCount = rows.Count,
+            LowestTotalPrice = lowestRankRows.Min(r => r.TotalPrice),
+            LowestRank = lowestRank,
+            IsLowestRankTied = lowestRankRows.Count > 1,
+            LowestRankSupplierCount = lowestRankRows.Count
+        };
+    }
+
+    private static DateTimeOffset ToDateTimeOffset(object? value)
+    {
+        return value switch
+        {
+            DateTimeOffset dto => dto,
+            DateTime dt => new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc)),
+            null => DateTimeOffset.UtcNow,
+            _ => throw new ApiException("Invalid evaluated_at value from database.", StatusCodes.Status500InternalServerError)
+        };
+    }
+
     private static int ToRankInteger(long rank)
     {
         if (rank is <= 0 or > int.MaxValue)
@@ -458,6 +547,18 @@ public class EvaluationRepository : IEvaluationRepository
         public string CurrencyCode { get; init; } = string.Empty;
         public long RoundId { get; init; }
         public int RoundNumber { get; init; }
+    }
+
+    private sealed class ExistingEvaluationRow
+    {
+        public long RfqId { get; init; }
+        public string RfqNumber { get; init; } = string.Empty;
+        public string CurrencyCode { get; init; } = string.Empty;
+        public long RoundId { get; init; }
+        public int RoundNumber { get; init; }
+        public decimal TotalPrice { get; init; }
+        public int RankPosition { get; init; }
+        public object? EvaluatedAt { get; init; }
     }
 
     private sealed class EvaluationBidDetailRow

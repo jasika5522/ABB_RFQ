@@ -1,0 +1,18 @@
+.meta-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0.5rem 1rem;
+}
+
+.meta-grid dt {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.meta-grid dd {
+  margin: 0;
+}
+
+.loading {
+  color: var(--color-text-muted);
+}

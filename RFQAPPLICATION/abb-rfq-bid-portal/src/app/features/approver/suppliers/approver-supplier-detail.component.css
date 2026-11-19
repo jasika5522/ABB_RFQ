@@ -1,0 +1,6 @@
+@import '../../procurement/suppliers/procurement-supplier-detail.component.css';
+
+.read-only-note {
+  color: var(--color-text-muted);
+  margin-bottom: 1rem;
+}

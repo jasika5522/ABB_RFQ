@@ -1,0 +1,34 @@
+.form-card h2 {
+  margin: 1rem 0 0.5rem;
+  color: var(--color-primary);
+  font-size: 1.05rem;
+}
+
+.form-card h2:first-child {
+  margin-top: 0;
+}
+
+.item-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.form-field.narrow input {
+  max-width: 120px;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+textarea {
+  padding: 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}

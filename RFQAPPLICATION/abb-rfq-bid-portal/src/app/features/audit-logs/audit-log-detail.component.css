@@ -1,0 +1,30 @@
+.meta-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.5rem 1rem;
+}
+
+.meta-grid dt {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.meta-grid dd {
+  margin: 0;
+}
+
+.json-block {
+  background: #f7f9fc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+.loading {
+  color: var(--color-text-muted);
+}

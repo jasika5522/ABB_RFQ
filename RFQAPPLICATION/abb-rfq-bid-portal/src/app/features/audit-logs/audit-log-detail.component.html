@@ -1,0 +1,47 @@
+<app-page-header
+  title="Audit log detail"
+  [breadcrumbs]="[{ label: 'Audit Logs', route: '/audit-logs' }, { label: 'Detail' }]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (log) {
+  <section class="card">
+    <dl class="meta-grid">
+      <dt>Audit ID</dt>
+      <dd>{{ log.auditId }}</dd>
+      <dt>Action</dt>
+      <dd>{{ log.action }}</dd>
+      <dt>Entity</dt>
+      <dd>{{ log.entityType }} #{{ log.entityId }}</dd>
+      <dt>Timestamp</dt>
+      <dd>{{ log.createdAt | date: 'medium' }}</dd>
+      @if (log.actor) {
+        <dt>Actor</dt>
+        <dd>{{ log.actor.fullName }} ({{ log.actor.email }}, {{ log.actor.role }})</dd>
+      }
+      @if (log.ipAddress) {
+        <dt>IP address</dt>
+        <dd>{{ log.ipAddress }}</dd>
+      }
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Old values</h2>
+    <pre class="json-block">{{ formatJson(log.oldValues) }}</pre>
+  </section>
+
+  <section class="card">
+    <h2>New values</h2>
+    <pre class="json-block">{{ formatJson(log.newValues) }}</pre>
+  </section>
+}
+
+<a class="btn btn-outline" routerLink="/audit-logs">Back to list</a>

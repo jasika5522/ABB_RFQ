@@ -1,0 +1,74 @@
+<app-page-header
+  title="Suppliers"
+  [breadcrumbs]="[
+    { label: 'Approver', route: '/approver/dashboard' },
+    { label: 'Suppliers' }
+  ]"
+></app-page-header>
+
+<p class="read-only-note">Read-only view. Approval and suspension are performed by Procurement Officers.</p>
+
+<form [formGroup]="filters" class="filter-row card" (ngSubmit)="applyFilters()">
+  <input type="search" placeholder="Company name" formControlName="companyName" aria-label="Company name" />
+  <select formControlName="approvalStatus" aria-label="Approval status">
+    <option value="">All statuses</option>
+    @for (s of statusFilters; track s) {
+      @if (s) {
+        <option [value]="s">{{ s }}</option>
+      }
+    }
+  </select>
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear</button>
+</form>
+
+@if (loading) {
+  <p class="loading" role="status">Loading suppliers…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state title="No suppliers found" message="Try adjusting your filters." />
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="card table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of items; track s.supplierId) {
+          <tr>
+            <td>{{ s.companyName }}</td>
+            <td>{{ s.userEmail }}</td>
+            <td><span [class]="statusClass(s.approvalStatus)">{{ s.approvalStatus }}</span></td>
+            <td>
+              <a class="btn btn-secondary" [routerLink]="['/approver/suppliers', s.supplierId]">View</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <span>Page {{ page }} of {{ totalPages }} ({{ totalCount }} total)</span>
+    <div class="pagination-actions">
+      <button type="button" class="btn btn-outline" (click)="loadPage(page - 1)" [disabled]="page <= 1">
+        Previous
+      </button>
+      <button type="button" class="btn btn-outline" (click)="loadPage(page + 1)" [disabled]="page >= totalPages">
+        Next
+      </button>
+    </div>
+  </div>
+}

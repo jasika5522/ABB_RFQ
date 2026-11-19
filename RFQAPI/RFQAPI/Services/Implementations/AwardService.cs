@@ -54,7 +54,9 @@ public class AwardService : IAwardService
         var award = await _awardRepository.GetByRfqIdAsync(rfqId, cancellationToken);
         if (award is null)
         {
-            throw new ApiException("Award not found.", StatusCodes.Status404NotFound);
+            throw new ApiException(
+                "No award has been issued for this RFQ.",
+                StatusCodes.Status404NotFound);
         }
 
         return award;

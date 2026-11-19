@@ -1,0 +1,91 @@
+@if (loading) {
+  <p class="loading" role="status">Loading bid…</p>
+} @else if (loadError) {
+  <app-page-header title="Bid Details"></app-page-header>
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <a routerLink="/supplier/my-bids" class="btn btn-secondary">Back to My Bids</a>
+} @else if (bid) {
+  <app-page-header
+    [title]="'Bid #' + bid.bidId"
+    [breadcrumbs]="[
+      { label: 'Supplier', route: '/supplier/dashboard' },
+      { label: 'My Bids', route: '/supplier/my-bids' },
+      { label: 'Bid ' + bid.bidId }
+    ]"
+  ></app-page-header>
+
+  @if (successMessage) {
+    <div class="success-banner" role="status">{{ successMessage }}</div>
+  }
+  @if (actionError) {
+    <div class="error-banner" role="alert">{{ actionError }}</div>
+  }
+
+  <section class="card meta-card">
+    <dl class="meta-grid">
+      <dt>RFQ</dt>
+      <dd>{{ bid.rfqNumber }} — {{ bid.rfqTitle }}</dd>
+      <dt>Round</dt>
+      <dd>Round {{ bid.roundNumber }} ({{ bid.roundStatus }})</dd>
+      <dt>Status</dt>
+      <dd>{{ bid.status }}</dd>
+      <dt>Submitted</dt>
+      <dd>{{ bid.submittedAt | date: 'medium' }}</dd>
+      <dt>Deadline</dt>
+      <dd>{{ bid.roundDeadline | date: 'medium' }}</dd>
+      <dt>Currency</dt>
+      <dd>{{ bid.currencyCode }}</dd>
+      <dt>Bid total</dt>
+      <dd>{{ bidTotal | number: '1.2-2' }} {{ bid.currencyCode }}</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Bid line items</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Qty</th>
+          <th>Unit</th>
+          <th>Unit price</th>
+          <th>Line total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (line of bid.items; track line.bidItemId) {
+          <tr>
+            <td>{{ line.itemName }}</td>
+            <td>{{ line.rfqQuantity | number: '1.0-3' }}</td>
+            <td>{{ line.unit }}</td>
+            <td>{{ line.unitPrice | number: '1.2-2' }}</td>
+            <td>{{ line.rfqQuantity * line.unitPrice | number: '1.2-2' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (canWithdraw) {
+    @if (!confirmWithdraw) {
+      <button type="button" class="btn btn-outline danger" (click)="requestWithdraw()">Withdraw bid</button>
+    } @else {
+      <div class="confirm card" role="alertdialog">
+        <p>
+          Withdraw this bid? This action is permanent for bid #{{ bid.bidId }}. You can submit a new bid in the
+          same round if the deadline has not passed.
+        </p>
+        <div class="actions">
+          <button type="button" class="btn btn-primary danger" (click)="withdraw()" [disabled]="withdrawing">
+            {{ withdrawing ? 'Withdrawing…' : 'Confirm withdraw' }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="cancelWithdraw()" [disabled]="withdrawing">
+            Cancel
+          </button>
+        </div>
+      </div>
+    }
+  }
+
+  <a routerLink="/supplier/my-bids" class="btn btn-outline back">← Back to My Bids</a>
+}

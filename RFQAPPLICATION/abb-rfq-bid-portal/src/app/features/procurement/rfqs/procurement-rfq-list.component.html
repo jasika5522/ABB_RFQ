@@ -1,0 +1,75 @@
+<app-page-header
+  title="RFQ Management"
+  [breadcrumbs]="[{ label: 'Procurement', route: '/procurement/dashboard' }, { label: 'RFQs' }]"
+></app-page-header>
+
+<div class="toolbar card">
+  <form [formGroup]="filters" (ngSubmit)="applyFilters()" class="filter-form">
+    <div class="filter-row">
+      <input formControlName="rfqNumber" placeholder="RFQ number" />
+      <input formControlName="title" placeholder="Title" />
+      <select formControlName="status">
+        <option value="">All statuses</option>
+        @for (s of statuses; track s) {
+          <option [value]="s">{{ s }}</option>
+        }
+      </select>
+      <button type="submit" class="btn btn-primary">Filter</button>
+      <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear</button>
+    </div>
+  </form>
+  <a routerLink="/procurement/rfqs/create" class="btn btn-primary">Create RFQ</a>
+</div>
+
+@if (loading) {
+  <p class="loading" role="status">Loading RFQs…</p>
+}
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state title="No RFQs found" message="Create a new RFQ or adjust your filters."></app-empty-state>
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="card table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>RFQ #</th>
+          <th>Title</th>
+          <th>Currency</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (rfq of items; track rfq.rfqId) {
+          <tr>
+            <td>{{ rfq.rfqNumber }}</td>
+            <td>{{ rfq.title }}</td>
+            <td>{{ rfq.currencyCode }}</td>
+            <td><span [class]="statusClass(rfq.status)">{{ rfq.status }}</span></td>
+            <td>{{ rfq.createdAt | date: 'medium' }}</td>
+            <td>
+              <a class="btn btn-secondary" [routerLink]="['/procurement/rfqs', rfq.rfqId]">View</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination">
+    <span>Page {{ page }} of {{ totalPages }}</span>
+    <div class="pagination-actions">
+      <button type="button" class="btn btn-outline" (click)="loadPage(page - 1)" [disabled]="page <= 1">
+        Previous
+      </button>
+      <button type="button" class="btn btn-outline" (click)="loadPage(page + 1)" [disabled]="page >= totalPages">
+        Next
+      </button>
+    </div>
+  </div>
+}

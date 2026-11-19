@@ -1,0 +1,27 @@
+@import '../../procurement/evaluations/procurement-evaluation-detail.component.css';
+
+.reject-form label,
+form label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+}
+
+textarea {
+  width: 100%;
+  padding: 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.field-error {
+  color: var(--color-danger);
+  display: block;
+  margin-bottom: 0.5rem;
+}

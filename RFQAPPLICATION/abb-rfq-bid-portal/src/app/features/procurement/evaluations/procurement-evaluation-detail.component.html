@@ -1,0 +1,116 @@
+<app-page-header
+  [title]="'Evaluation: ' + (rfqNumber || 'RFQ')"
+  [breadcrumbs]="[
+    { label: 'Procurement', route: '/procurement/dashboard' },
+    { label: 'Bid Evaluation', route: '/procurement/evaluations' },
+    { label: 'Results' }
+  ]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading evaluation…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (!loading && !loadError && missingPersistedResults) {
+  <div class="error-banner" role="alert">
+    This round is marked evaluated, but ranking results are not available. Contact an administrator or
+    check audit logs.
+  </div>
+}
+
+@if (!loading && !loadError && !results && round && !canEvaluate && !missingPersistedResults) {
+  <section class="card">
+    <h2>Not ready for evaluation</h2>
+    <p>
+      Round {{ round.roundNumber }} is <strong>{{ round.status }}</strong>
+      @if (rfqStatus) {
+        and RFQ status is <strong>{{ rfqStatus }}</strong>.
+      }
+    </p>
+  <p class="hint">
+      Evaluation requires the RFQ and round to be <strong>Closed</strong>, with complete submitted bids.
+      Close the round from RFQ Management after bidding ends.
+    </p>
+  </section>
+}
+
+@if (!loading && !loadError && canEvaluate) {
+  <section class="card">
+    <h2>Evaluation not yet completed</h2>
+    <p class="hint">Rankings will appear here after you run evaluation for this closed round.</p>
+    <h3>Evaluate bids</h3>
+    <p>
+      Confirm evaluation for <strong>{{ rfqNumber }}</strong> — {{ rfqTitle }}, round
+      {{ round?.roundNumber }}.
+    </p>
+    <p class="hint">
+      Evaluation will calculate supplier bid totals and rankings for this closed round. Rankings and
+      ties are determined by the backend.
+    </p>
+    @if (evaluateError) {
+      <div class="error-banner" role="alert">{{ evaluateError }}</div>
+    }
+    @if (!confirmEvaluate) {
+      <button type="button" class="btn btn-primary" (click)="confirmEvaluate = true">Evaluate bids</button>
+    } @else {
+      <p class="confirm-text">Run evaluation for this round now?</p>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" (click)="runEvaluate()" [disabled]="evaluating">
+          {{ evaluating ? 'Evaluating…' : 'Confirm evaluate' }}
+        </button>
+        <button type="button" class="btn btn-outline" (click)="confirmEvaluate = false" [disabled]="evaluating">
+          Cancel
+        </button>
+      </div>
+    }
+  </section>
+}
+
+@if (!loading && results) {
+  <section class="card">
+    <h2>Ranking results</h2>
+    <dl class="meta-grid">
+      <dt>RFQ</dt>
+      <dd>{{ results.summary.rfqNumber }} — {{ rfqTitle }}</dd>
+      <dt>Round</dt>
+      <dd>{{ results.summary.roundNumber }}</dd>
+      <dt>Evaluated</dt>
+      <dd>{{ results.summary.evaluatedAt | date: 'medium' }}</dd>
+      <dt>Currency</dt>
+      <dd>{{ results.summary.currencyCode }}</dd>
+    </dl>
+
+    <p class="outcome" [class.tie]="results.summary.isLowestRankTied">{{ tieMessage }}</p>
+
+    <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Supplier</th>
+          <th>Bid ID</th>
+          <th class="num">Total price</th>
+          <th class="num">Rank</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (bid of results.bids; track bid.bidId) {
+          <tr [class]="lowestRankClass(bid.rankPosition)">
+            <td>{{ bid.companyName }}</td>
+            <td>{{ bid.bidId }}</td>
+            <td class="num">
+              {{ bid.totalPrice | currency: results.summary.currencyCode : 'symbol' : '1.2-2' }}
+            </td>
+            <td class="num">{{ bid.rankPosition }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    </div>
+  </section>
+}
+
+<a class="btn btn-outline" routerLink="/procurement/evaluations">Back to list</a>

@@ -1,0 +1,40 @@
+<app-page-header
+  [title]="supplier?.companyName ?? 'Supplier details'"
+  [breadcrumbs]="[
+    { label: 'Approver', route: '/approver/dashboard' },
+    { label: 'Suppliers', route: '/approver/suppliers' },
+    { label: 'Details' }
+  ]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (supplier) {
+  <p class="read-only-note">Read-only. You cannot change supplier approval status.</p>
+  <section class="card">
+    <dl class="meta-grid">
+      <dt>Company</dt>
+      <dd>{{ supplier.companyName }}</dd>
+      <dt>Registration number</dt>
+      <dd>{{ supplier.registrationNumber }}</dd>
+      <dt>Contact</dt>
+      <dd>{{ supplier.contactPerson || '—' }}</dd>
+      <dt>Phone</dt>
+      <dd>{{ supplier.phone || '—' }}</dd>
+      <dt>Email</dt>
+      <dd>{{ supplier.userEmail }}</dd>
+      <dt>Status</dt>
+      <dd><span [class]="statusClass(supplier.approvalStatus)">{{ supplier.approvalStatus }}</span></dd>
+      <dt>Registered</dt>
+      <dd>{{ supplier.createdAt | date: 'medium' }}</dd>
+    </dl>
+  </section>
+}
+
+<a class="btn btn-outline" routerLink="/approver/suppliers">Back to list</a>

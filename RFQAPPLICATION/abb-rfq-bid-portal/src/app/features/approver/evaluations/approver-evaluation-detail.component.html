@@ -1,0 +1,166 @@
+<app-page-header
+  [title]="'Review: ' + (results?.summary?.rfqNumber || 'Evaluation')"
+  [breadcrumbs]="[
+    { label: 'Approver', route: '/approver/dashboard' },
+    { label: 'Evaluation Review', route: '/approver/evaluations' },
+    { label: 'Details' }
+  ]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (evaluationPending) {
+  <section class="card">
+    <h2>Evaluation not yet completed</h2>
+    <p>
+      Procurement has not finished evaluating this round. You can review rankings here after evaluation is
+      complete.
+    </p>
+    <a class="btn btn-outline" routerLink="/approver/evaluations">Back to list</a>
+  </section>
+}
+
+@if (!loading && results) {
+  <section class="card">
+    <h2>Ranking</h2>
+    <p>{{ rfqTitle }}</p>
+    @if (results.summary.isLowestRankTied) {
+      <p class="outcome tie">Multiple suppliers share the lowest rank. Reject the evaluation to open a new round.</p>
+    } @else {
+      <p class="outcome">One supplier has the unique lowest rank and may be approved for award.</p>
+    }
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Supplier</th>
+          <th>Bid ID</th>
+          <th class="num">Total</th>
+          <th class="num">Rank</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (bid of results.bids; track bid.bidId) {
+          <tr [class]="lowestRankClass(bid.rankPosition)">
+            <td>{{ bid.companyName }}</td>
+            <td>{{ bid.bidId }}</td>
+            <td class="num">
+              {{ bid.totalPrice | currency: results.summary.currencyCode : 'symbol' : '1.2-2' }}
+            </td>
+            <td class="num">{{ bid.rankPosition }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Approver decision</h2>
+    @if (decisionRecorded) {
+      <dl class="meta-grid">
+        <dt>Status</dt>
+        <dd>{{ decision?.status }}</dd>
+        <dt>Decision</dt>
+        <dd>{{ decision?.decision }}</dd>
+        @if (decision?.reason) {
+          <dt>Reason</dt>
+          <dd>{{ decision?.reason }}</dd>
+        }
+        <dt>Decided</dt>
+        <dd>{{ decision?.decidedAt | date: 'medium' }}</dd>
+      </dl>
+    } @else {
+      @if (decisionError) {
+        <div class="error-banner" role="alert">{{ decisionError }}</div>
+      }
+      @if (canApprove) {
+        @if (confirmDecision !== 'Approved') {
+          <button type="button" class="btn btn-primary" (click)="confirmDecision = 'Approved'">Approve evaluation</button>
+        } @else {
+          <p>Approve this evaluation?</p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" (click)="submitDecision('Approved')" [disabled]="submitting">
+              {{ submitting ? 'Saving…' : 'Confirm approval' }}
+            </button>
+            <button type="button" class="btn btn-outline" (click)="confirmDecision = null">Cancel</button>
+          </div>
+        }
+      }
+      @if (canReject) {
+        <form [formGroup]="rejectForm" class="reject-form">
+          <label for="reason">Rejection reason (required)</label>
+          <textarea id="reason" rows="3" formControlName="reason"></textarea>
+          @if (rejectForm.controls.reason.touched && rejectForm.controls.reason.invalid) {
+            <span class="field-error">A reason is required for tied lowest bids.</span>
+          }
+          @if (confirmDecision !== 'Rejected') {
+            <button
+              type="button"
+              class="btn btn-danger"
+              (click)="confirmDecision = 'Rejected'"
+              [disabled]="rejectForm.invalid"
+            >
+              Reject evaluation
+            </button>
+          } @else {
+            <p>Reject evaluation with reason: "{{ rejectForm.controls.reason.value.trim() }}"?</p>
+            <div class="actions">
+              <button type="button" class="btn btn-danger" (click)="submitDecision('Rejected')" [disabled]="submitting">
+                {{ submitting ? 'Saving…' : 'Confirm rejection' }}
+              </button>
+              <button type="button" class="btn btn-outline" (click)="confirmDecision = null">Cancel</button>
+            </div>
+          }
+        </form>
+      }
+    }
+  </section>
+
+  @if (existingAward) {
+    <section class="card">
+      <h2>Award recorded</h2>
+      <p>
+        RFQ awarded to {{ existingAward.companyName }} (bid {{ existingAward.bidId }}) on
+        {{ existingAward.awardedAt | date: 'medium' }}.
+      </p>
+      <a class="btn btn-secondary" [routerLink]="['/approver/awards', existingAward.rfqId]">View award</a>
+    </section>
+  } @else if (canAward && winningBid) {
+    <section class="card">
+      <h2>Award RFQ</h2>
+      <p>
+        Winning bid: {{ winningBid.companyName }} — total
+        {{ winningBid.totalPrice | currency: winningBid.currencyCode : 'symbol' : '1.2-2' }} (bid
+        {{ winningBid.bidId }}).
+      </p>
+      @if (awardError) {
+        <div class="error-banner" role="alert">{{ awardError }}</div>
+      }
+      <form [formGroup]="awardForm">
+        <label for="awardComment">Award comment</label>
+        <textarea id="awardComment" rows="3" formControlName="awardComment"></textarea>
+      </form>
+      @if (!confirmAward) {
+        <button type="button" class="btn btn-primary" (click)="confirmAward = true" [disabled]="awardForm.invalid">
+          Award RFQ
+        </button>
+      } @else {
+        <p>Are you sure you want to award this RFQ to the selected supplier?</p>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" (click)="createAward()" [disabled]="awarding || awardForm.invalid">
+            {{ awarding ? 'Creating…' : 'Confirm award' }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="confirmAward = false">Cancel</button>
+        </div>
+      }
+    </section>
+  }
+}
+
+<a class="btn btn-outline" routerLink="/approver/evaluations">Back to list</a>

@@ -47,6 +47,8 @@ builder.Services.AddSingleton<DapperContext>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IRfqRepository, RfqRepository>();
+builder.Services.AddScoped<ISupplierRfqRepository, SupplierRfqRepository>();
+builder.Services.AddScoped<ISupplierRfqService, SupplierRfqService>();
 builder.Services.AddScoped<IRfqRoundRepository, RfqRoundRepository>();
 builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IEvaluationRepository, EvaluationRepository>();
@@ -114,7 +116,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors("AllowAngular");
 
 app.UseAuthentication();

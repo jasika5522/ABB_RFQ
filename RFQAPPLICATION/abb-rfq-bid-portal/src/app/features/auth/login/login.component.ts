@@ -40,7 +40,15 @@ export class LoginComponent {
     this.auth.login(this.form.getRawValue()).subscribe({
       next: (response) => {
         this.submitting = false;
-        void this.router.navigateByUrl(this.auth.getDashboardRouteForRole(response.user.role));
+        this.auth.fetchCurrentUser().subscribe({
+          next: (user) => {
+            void this.router.navigateByUrl(this.auth.getDashboardRouteForRole(user.role));
+          },
+          error: () => {
+            this.errorMessage = 'Login succeeded but the session could not be verified.';
+            this.auth.logout();
+          }
+        });
       },
       error: (error: HttpErrorResponse) => {
         this.submitting = false;

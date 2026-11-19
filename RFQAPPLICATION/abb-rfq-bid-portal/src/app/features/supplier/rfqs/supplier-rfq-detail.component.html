@@ -1,0 +1,159 @@
+@if (loading) {
+  <p class="loading" role="status">Loading RFQ details…</p>
+} @else if (loadError) {
+  <app-page-header title="RFQ Details"></app-page-header>
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <a routerLink="/supplier/rfqs" class="btn btn-secondary">Back to list</a>
+} @else if (rfq) {
+  <app-page-header
+    [title]="rfq.title"
+    [breadcrumbs]="[
+      { label: 'Supplier', route: '/supplier/dashboard' },
+      { label: 'Available RFQs', route: '/supplier/rfqs' },
+      { label: rfq.rfqNumber }
+    ]"
+  ></app-page-header>
+
+  @if (rfq.eligibility.message) {
+    <div [class]="eligibilityClass()" role="status">
+      <strong>Bidding status:</strong> {{ rfq.eligibility.message }}
+    </div>
+  }
+
+  <section class="card summary">
+    <dl class="meta-grid">
+      <dt>RFQ Number</dt>
+      <dd>{{ rfq.rfqNumber }}</dd>
+      <dt>Currency</dt>
+      <dd>{{ rfq.currencyCode }}</dd>
+      <dt>Published Round</dt>
+      <dd>Round {{ rfq.roundNumber }}</dd>
+      <dt>Published</dt>
+      <dd>{{ rfq.publishedAt ? (rfq.publishedAt | date: 'medium') : '—' }}</dd>
+      <dt>Submission Deadline</dt>
+      <dd>{{ rfq.deadline | date: 'medium' }}</dd>
+      <dt>Your Approval Status</dt>
+      <dd>
+        <span class="status-pill">{{ rfq.eligibility.approvalStatus }}</span>
+      </dd>
+    </dl>
+
+    @if (rfq.description) {
+      <div class="description">
+        <h2>Description</h2>
+        <p>{{ rfq.description }}</p>
+      </div>
+    }
+  </section>
+
+  <section class="card items-section">
+    <h2>Mandatory RFQ Items</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Description</th>
+            <th>Quantity</th>
+            <th>Unit</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of rfq.items; track item.rfqItemId) {
+            <tr>
+              <td>{{ item.itemName }}</td>
+              <td>{{ item.description || '—' }}</td>
+              <td>{{ item.quantity | number: '1.0-3' }}</td>
+              <td>{{ item.unit }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card bid-section">
+    <div class="bid-head">
+      <h2>Your bid</h2>
+      @if (activeBid) {
+        <a class="btn btn-secondary" [routerLink]="['/supplier/my-bids', activeBid.bidId]">
+          View submitted bid #{{ activeBid.bidId }}
+        </a>
+      }
+    </div>
+
+    @if (submitSuccess) {
+      <div class="success-banner" role="status">{{ submitSuccess }}</div>
+    }
+    @if (submitError) {
+      <div class="error-banner" role="alert">{{ submitError }}</div>
+    }
+
+    @if (canOpenBidForm) {
+      <button type="button" class="btn btn-primary" (click)="openBidForm()">Submit bid</button>
+    } @else if (activeBid) {
+      <p class="hint">You have an active submitted bid for this round.</p>
+    } @else if (!rfq.eligibility.canSubmitBid) {
+      <p class="hint">{{ rfq.eligibility.message }}</p>
+    }
+
+    @if (showBidForm) {
+      <form [formGroup]="bidForm" (ngSubmit)="submitBid()" class="bid-form">
+        <p class="hint">Enter a unit price for every mandatory item. Currency: {{ rfq.currencyCode }}</p>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Unit</th>
+              <th>Unit price ({{ rfq.currencyCode }})</th>
+              <th>Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of rfq.items; track item.rfqItemId) {
+              <tr>
+                <td>
+                  {{ item.itemName }}
+                  @if (item.description) {
+                    <div class="item-desc">{{ item.description }}</div>
+                  }
+                </td>
+                <td>{{ item.quantity | number: '1.0-3' }}</td>
+                <td>{{ item.unit }}</td>
+                <td>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    [formControlName]="item.rfqItemId.toString()"
+                    [class.invalid]="bidForm.get(item.rfqItemId.toString())?.invalid && bidForm.get(item.rfqItemId.toString())?.touched"
+                  />
+                </td>
+                <td>
+                  {{ lineTotal(item.rfqItemId, item.quantity) | number: '1.2-2' }}
+                </td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" class="total-label">Bid total</td>
+              <td class="total-value">{{ bidTotal | number: '1.2-2' }} {{ rfq.currencyCode }}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="bidForm.invalid || submitting">
+            {{ submitting ? 'Submitting…' : 'Submit bid' }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="cancelBidForm()" [disabled]="submitting">
+            Cancel
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+
+  <a routerLink="/supplier/rfqs" class="btn btn-outline back-link">← Back to Available RFQs</a>
+}

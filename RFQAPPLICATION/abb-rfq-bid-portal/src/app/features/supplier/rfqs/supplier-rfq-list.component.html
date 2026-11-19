@@ -1,0 +1,79 @@
+<app-page-header
+  title="Available RFQs"
+  [breadcrumbs]="[{ label: 'Supplier', route: '/supplier/dashboard' }, { label: 'Available RFQs' }]"
+></app-page-header>
+
+<form class="toolbar card" [formGroup]="searchForm" (ngSubmit)="onSearch()">
+  <label for="search">Search RFQ number or title</label>
+  <div class="toolbar-row">
+    <input id="search" formControlName="search" placeholder="e.g. RFQ-2026 or cabling" />
+    <button type="submit" class="btn btn-primary">Search</button>
+    <button type="button" class="btn btn-outline" (click)="clearSearch()">Clear</button>
+  </div>
+</form>
+
+@if (loading) {
+  <p class="loading" role="status">Loading RFQs…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <button type="button" class="btn btn-secondary" (click)="loadPage(page)">Retry</button>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state
+    title="No RFQs available"
+    message="There are no published RFQs with an open bidding round at this time."
+  ></app-empty-state>
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="table-wrap card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>RFQ #</th>
+          <th>Title</th>
+          <th>Currency</th>
+          <th>Round</th>
+          <th>Deadline</th>
+          <th>Items</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (rfq of items; track rfq.rfqId) {
+          <tr>
+            <td data-label="RFQ #">{{ rfq.rfqNumber }}</td>
+            <td data-label="Title">
+              <strong>{{ rfq.title }}</strong>
+              @if (rfq.description) {
+                <p class="desc">{{ rfq.description }}</p>
+              }
+            </td>
+            <td data-label="Currency">{{ rfq.currencyCode }}</td>
+            <td data-label="Round">{{ rfq.roundNumber }}</td>
+            <td data-label="Deadline">{{ rfq.deadline | date: 'medium' }}</td>
+            <td data-label="Items">{{ rfq.mandatoryItemCount }}</td>
+            <td data-label="Action">
+              <a class="btn btn-secondary" [routerLink]="['/supplier/rfqs', rfq.rfqId]">View Details</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <span>Page {{ page }} of {{ totalPages }} ({{ totalCount }} total)</span>
+    <div class="pagination-actions">
+      <button type="button" class="btn btn-outline" (click)="prevPage()" [disabled]="page <= 1">
+        Previous
+      </button>
+      <button type="button" class="btn btn-outline" (click)="nextPage()" [disabled]="page >= totalPages">
+        Next
+      </button>
+    </div>
+  </div>
+}

@@ -1,0 +1,58 @@
+<app-page-header
+  title="Evaluation Review"
+  [breadcrumbs]="[
+    { label: 'Approver', route: '/approver/dashboard' },
+    { label: 'Evaluation Review' }
+  ]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading evaluations…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <button type="button" class="btn btn-secondary" (click)="load()">Retry</button>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state
+    title="No evaluated rounds"
+    message="When procurement completes bid evaluation, rounds will appear here for your decision."
+  ></app-empty-state>
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="card table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>RFQ</th>
+          <th>Title</th>
+          <th>Round</th>
+          <th>Decision</th>
+          <th>Tie at lowest rank</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of items; track row.roundId) {
+          <tr>
+            <td>{{ row.rfqNumber }}</td>
+            <td>{{ row.rfqTitle }}</td>
+            <td>{{ row.roundNumber }}</td>
+            <td><span class="status-pill">{{ decisionLabel(row) }}</span></td>
+            <td>{{ row.isLowestRankTied ? 'Yes' : 'No' }}</td>
+            <td>
+              <a
+                class="btn btn-secondary"
+                [routerLink]="['/approver/evaluations', row.rfqId, row.roundId]"
+                >Review</a
+              >
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

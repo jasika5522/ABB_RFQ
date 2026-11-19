@@ -1,0 +1,191 @@
+@if (loading) {
+  <p class="loading" role="status">Loading RFQ…</p>
+} @else if (loadError) {
+  <app-page-header title="RFQ Details"></app-page-header>
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+} @else if (rfq) {
+  <app-page-header
+    [title]="rfq.title"
+    [breadcrumbs]="[
+      { label: 'Procurement', route: '/procurement/dashboard' },
+      { label: 'RFQs', route: '/procurement/rfqs' },
+      { label: rfq.rfqNumber }
+    ]"
+  ></app-page-header>
+
+  @if (successMessage) {
+    <div class="success-banner" role="status">{{ successMessage }}</div>
+  }
+
+  <section class="card">
+    <div class="section-head">
+      <h2>RFQ details</h2>
+      @if (isDraft && !editMode) {
+        <button type="button" class="btn btn-primary" (click)="startEdit()">Edit</button>
+      }
+    </div>
+
+    @if (rfqError) {
+      <div class="error-banner" role="alert">{{ rfqError }}</div>
+    }
+
+    @if (!editMode) {
+      <dl class="meta-grid">
+        <dt>RFQ number</dt>
+        <dd>{{ rfq.rfqNumber }}</dd>
+        <dt>Status</dt>
+        <dd><span [class]="statusClass(rfq.status)">{{ rfq.status }}</span></dd>
+        <dt>Currency</dt>
+        <dd>{{ rfq.currencyCode }}</dd>
+        <dt>Description</dt>
+        <dd>{{ rfq.description || '—' }}</dd>
+        <dt>Created</dt>
+        <dd>{{ rfq.createdAt | date: 'medium' }}</dd>
+        <dt>Updated</dt>
+        <dd>{{ rfq.updatedAt | date: 'medium' }}</dd>
+      </dl>
+      <h3>Items ({{ rfq.items.length }})</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Description</th>
+            <th>Qty</th>
+            <th>Unit</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of rfq.items; track item.rfqItemId) {
+            <tr>
+              <td>{{ item.itemName }}</td>
+              <td>{{ item.description || '—' }}</td>
+              <td>{{ item.quantity | number: '1.0-3' }}</td>
+              <td>{{ item.unit }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <form [formGroup]="editForm" (ngSubmit)="saveRfq()">
+        <div class="form-field">
+          <label>Title</label>
+          <input formControlName="title" />
+        </div>
+        <div class="form-field">
+          <label>Description</label>
+          <textarea formControlName="description" rows="3"></textarea>
+        </div>
+        <div class="form-field">
+          <label>Currency</label>
+          <input formControlName="currencyCode" maxlength="3" />
+        </div>
+        <div formArrayName="items">
+          @for (item of items.controls; track i; let i = $index) {
+            <div class="item-row" [formGroupName]="i">
+              <input formControlName="itemName" placeholder="Item name" />
+              <input formControlName="description" placeholder="Description" />
+              <input type="number" step="0.001" formControlName="quantity" placeholder="Qty" />
+              <input formControlName="unit" placeholder="Unit" />
+              @if (items.length > 1) {
+                <button type="button" class="btn btn-outline" (click)="removeItem(i)">Remove</button>
+              }
+            </div>
+          }
+        </div>
+        <button type="button" class="btn btn-secondary" (click)="addItem()">Add item</button>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary" [disabled]="editForm.invalid || savingRfq">Save</button>
+          <button type="button" class="btn btn-outline" (click)="cancelEdit()">Cancel</button>
+        </div>
+      </form>
+    }
+  </section>
+
+  <section class="card rounds-section">
+    <h2>Round management</h2>
+    @if (roundSuccess) {
+      <div class="success-banner" role="status">{{ roundSuccess }}</div>
+    }
+    @if (roundError) {
+      <div class="error-banner" role="alert">{{ roundError }}</div>
+    }
+
+    @if (canCreateRound()) {
+      <div class="create-round">
+        <label for="deadline">New round submission deadline</label>
+        <div class="create-row">
+          <input
+            id="deadline"
+            type="datetime-local"
+            [value]="roundDeadline"
+            (input)="roundDeadline = $any($event.target).value"
+          />
+          <button
+            type="button"
+            class="btn btn-primary"
+            (click)="createRound()"
+            [disabled]="creatingRound || !roundDeadline"
+          >
+            Create round
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (rounds.length === 0) {
+      <p class="hint">No rounds yet.</p>
+    } @else {
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Round</th>
+            <th>Status</th>
+            <th>Published</th>
+            <th>Deadline</th>
+            <th>Closed</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (round of rounds; track round.roundId) {
+            <tr>
+              <td>{{ round.roundNumber }}</td>
+              <td><span [class]="statusClass(round.status)">{{ round.status }}</span></td>
+              <td>{{ round.publishedAt ? (round.publishedAt | date: 'medium') : '—' }}</td>
+              <td>{{ round.deadline | date: 'medium' }}</td>
+              <td>{{ round.closedAt ? (round.closedAt | date: 'medium') : '—' }}</td>
+              <td class="actions-cell">
+                @if (round.status === 'Draft' && confirmPublishRoundId !== round.roundId) {
+                  <button type="button" class="btn btn-secondary" (click)="confirmPublishRoundId = round.roundId">
+                    Publish
+                  </button>
+                }
+                @if (round.status === 'Draft' && confirmPublishRoundId === round.roundId) {
+                  <div class="confirm-inline">
+                    <span>Publish this round and RFQ?</span>
+                    <button type="button" class="btn btn-primary" (click)="publishRound(round.roundId)" [disabled]="roundActionBusy">
+                      Confirm
+                    </button>
+                    <button type="button" class="btn btn-outline" (click)="confirmPublishRoundId = null">Cancel</button>
+                  </div>
+                }
+                @if (round.status === 'Published' && confirmCloseRoundId !== round.roundId) {
+                  <button type="button" class="btn btn-outline" (click)="confirmCloseRoundId = round.roundId">Close</button>
+                }
+                @if (round.status === 'Published' && confirmCloseRoundId === round.roundId) {
+                  <div class="confirm-inline">
+                    <span>Close bidding for this round?</span>
+                    <button type="button" class="btn btn-primary" (click)="closeRound(round.roundId)" [disabled]="roundActionBusy">
+                      Confirm
+                    </button>
+                    <button type="button" class="btn btn-outline" (click)="confirmCloseRoundId = null">Cancel</button>
+                  </div>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+}

@@ -1,0 +1,66 @@
+.loading {
+  color: var(--color-text-muted);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.data-table th {
+  background: var(--color-secondary-light);
+  color: var(--color-primary);
+}
+
+.pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pill-submitted {
+  background: #e8f2fd;
+  color: var(--color-primary);
+}
+
+.pill-withdrawn {
+  background: #fff8e1;
+  color: #8a6d00;
+}
+
+.pill-accepted {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.pill-rejected {
+  background: #fdecea;
+  color: #c62828;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 0.5rem;
+}

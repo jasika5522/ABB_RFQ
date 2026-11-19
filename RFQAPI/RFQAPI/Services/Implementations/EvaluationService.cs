@@ -50,7 +50,9 @@ public class EvaluationService : IEvaluationService
         var result = await _evaluationRepository.GetResultsAsync(rfqId, roundId, cancellationToken);
         if (result is null)
         {
-            throw new ApiException("Evaluation results not found.", StatusCodes.Status404NotFound);
+            throw new ApiException(
+                "This round has not been evaluated yet.",
+                StatusCodes.Status404NotFound);
         }
 
         return result;

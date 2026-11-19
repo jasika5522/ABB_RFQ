@@ -1,0 +1,62 @@
+<app-page-header
+  title="My Bids"
+  [breadcrumbs]="[{ label: 'Supplier', route: '/supplier/dashboard' }, { label: 'My Bids' }]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading bids…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <button type="button" class="btn btn-secondary" (click)="loadPage(page)">Retry</button>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state
+    title="No bids yet"
+    message="When you submit bids on open RFQs, they will appear here."
+  ></app-empty-state>
+  <a routerLink="/supplier/rfqs" class="btn btn-primary">Browse RFQs</a>
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="card table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>RFQ</th>
+          <th>Title</th>
+          <th>Round</th>
+          <th>Bid ID</th>
+          <th>Submitted</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (bid of items; track bid.bidId) {
+          <tr>
+            <td>{{ bid.rfqNumber }}</td>
+            <td>{{ bid.rfqTitle }}</td>
+            <td>{{ bid.roundNumber }}</td>
+            <td>{{ bid.bidId }}</td>
+            <td>{{ bid.submittedAt | date: 'medium' }}</td>
+            <td><span [class]="statusClass(bid.status)">{{ bid.status }}</span></td>
+            <td>
+              <a class="btn btn-secondary" [routerLink]="['/supplier/my-bids', bid.bidId]">View Details</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <span>Page {{ page }} of {{ totalPages }} ({{ totalCount }} total)</span>
+    <div class="pagination-actions">
+      <button type="button" class="btn btn-outline" (click)="prevPage()" [disabled]="page <= 1">Previous</button>
+      <button type="button" class="btn btn-outline" (click)="nextPage()" [disabled]="page >= totalPages">Next</button>
+    </div>
+  </div>
+}

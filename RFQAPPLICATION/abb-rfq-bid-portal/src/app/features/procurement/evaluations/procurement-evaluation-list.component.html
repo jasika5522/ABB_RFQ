@@ -1,0 +1,68 @@
+<app-page-header
+  title="Bid Evaluation"
+  [breadcrumbs]="[
+    { label: 'Procurement', route: '/procurement/dashboard' },
+    { label: 'Bid Evaluation' }
+  ]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading rounds…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <button type="button" class="btn btn-secondary" (click)="load()">Retry</button>
+}
+
+@if (!loading && !loadError && items.length === 0) {
+  <app-empty-state
+    title="No rounds ready"
+    message="Closed RFQ rounds eligible for evaluation will appear here after bidding ends."
+  ></app-empty-state>
+}
+
+@if (!loading && !loadError && items.length > 0) {
+  <div class="card table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>RFQ</th>
+          <th>Title</th>
+          <th>Round</th>
+          <th>Round status</th>
+          <th>Evaluation</th>
+          <th>Deadline</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of items; track row.rfqId + '-' + row.roundId) {
+          <tr>
+            <td>{{ row.rfqNumber }}</td>
+            <td>{{ row.rfqTitle }}</td>
+            <td>{{ row.roundNumber }}</td>
+            <td>{{ row.roundStatus }}</td>
+            <td>{{ row.hasEvaluation ? 'Completed' : 'Awaiting evaluation' }}</td>
+            <td>{{ row.deadline | date: 'medium' }}</td>
+            <td>
+              @if (canEvaluate(row)) {
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/procurement/evaluations', row.rfqId, row.roundId]"
+                  >Evaluate bids</a
+                >
+              } @else {
+                <a
+                  class="btn btn-secondary"
+                  [routerLink]="['/procurement/evaluations', row.rfqId, row.roundId]"
+                  >View results</a
+                >
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

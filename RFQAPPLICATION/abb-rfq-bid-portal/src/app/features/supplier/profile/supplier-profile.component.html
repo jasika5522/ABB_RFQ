@@ -1,16 +1,131 @@
 <app-page-header title="My Profile"></app-page-header>
 
-@if (user) {
-  <div class="profile card">
-    <dl>
-      <dt>Name</dt>
-      <dd>{{ user.fullName }}</dd>
-      <dt>Email</dt>
-      <dd>{{ user.email }}</dd>
-      <dt>Role</dt>
-      <dd>{{ user.role }}</dd>
-    </dl>
+@if (loading) {
+  <p class="loading" role="status">Loading profile…</p>
+} @else if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+  <button type="button" class="btn btn-secondary" (click)="loadProfile()">Retry</button>
+} @else if (user && supplier) {
+  @if (successMessage) {
+    <div class="success-banner" role="status">{{ successMessage }}</div>
+  }
+  @if (saveError) {
+    <div class="error-banner" role="alert">{{ saveError }}</div>
+  }
+
+  <div class="profile-grid">
+    <section class="card profile-section">
+      <h2>Account Information</h2>
+      <p class="section-hint">Managed by your login account (read-only).</p>
+      <dl class="field-grid read-only">
+        <dt>Full Name</dt>
+        <dd>{{ user.fullName }}</dd>
+        <dt>Email</dt>
+        <dd>{{ user.email }}</dd>
+        <dt>User ID</dt>
+        <dd>{{ user.userId }}</dd>
+        <dt>Account Status</dt>
+        <dd>
+          <span [class]="user.isActive ? 'status status-approved' : 'status status-suspended'">
+            {{ accountStatusLabel() }}
+          </span>
+        </dd>
+        <dt>Account Creation Date</dt>
+        <dd>{{ user.createdAt | date: 'medium' }}</dd>
+      </dl>
+    </section>
+
+    <section class="card profile-section">
+      <div class="section-head">
+        <div>
+          <h2>Company Information</h2>
+          <p class="section-hint">Update contact details permitted by policy.</p>
+        </div>
+        @if (!editMode) {
+          <button type="button" class="btn btn-primary" (click)="startEdit()">Edit Profile</button>
+        }
+      </div>
+
+      <dl class="field-grid read-only system-fields">
+        <dt>Supplier ID</dt>
+        <dd>{{ supplier.supplierId }}</dd>
+        <dt>Registration Number</dt>
+        <dd>{{ supplier.registrationNumber }}</dd>
+        <dt>Approval Status</dt>
+        <dd>
+          <span [class]="statusClass(supplier.approvalStatus)">{{ supplier.approvalStatus }}</span>
+        </dd>
+      </dl>
+
+      @if (!editMode) {
+        <dl class="field-grid read-only">
+          <dt>Company Name</dt>
+          <dd>{{ supplier.companyName }}</dd>
+          <dt>Contact Person</dt>
+          <dd>{{ supplier.contactPerson || '—' }}</dd>
+          <dt>Phone Number</dt>
+          <dd>{{ supplier.phone || '—' }}</dd>
+        </dl>
+      } @else {
+        <form [formGroup]="companyForm" (ngSubmit)="save()" class="company-form">
+          <div
+            class="form-field"
+            [class.invalid-field]="companyForm.controls.companyName.invalid && companyForm.controls.companyName.touched"
+          >
+            <label for="companyName">Company Name</label>
+            <input id="companyName" formControlName="companyName" />
+            @if (companyForm.controls.companyName.touched && companyForm.controls.companyName.hasError('required')) {
+              <span class="form-error">Company name is required.</span>
+            }
+            @if (companyForm.controls.companyName.touched && companyForm.controls.companyName.hasError('minlength')) {
+              <span class="form-error">Company name must be at least 2 characters.</span>
+            }
+            @if (companyForm.controls.companyName.touched && companyForm.controls.companyName.hasError('maxlength')) {
+              <span class="form-error">Company name cannot exceed 200 characters.</span>
+            }
+          </div>
+
+          <div
+            class="form-field"
+            [class.invalid-field]="companyForm.controls.contactPerson.invalid && companyForm.controls.contactPerson.touched"
+          >
+            <label for="contactPerson">Contact Person</label>
+            <input id="contactPerson" formControlName="contactPerson" />
+            @if (companyForm.controls.contactPerson.touched && companyForm.controls.contactPerson.hasError('maxlength')) {
+              <span class="form-error">Contact person cannot exceed 150 characters.</span>
+            }
+          </div>
+
+          <div
+            class="form-field"
+            [class.invalid-field]="companyForm.controls.phone.invalid && companyForm.controls.phone.touched"
+          >
+            <label for="phone">Phone Number</label>
+            <input id="phone" formControlName="phone" />
+            @if (companyForm.controls.phone.touched && companyForm.controls.phone.hasError('pattern')) {
+              <span class="form-error">Enter a valid phone number (up to 20 characters).</span>
+            }
+            @if (companyForm.controls.phone.touched && companyForm.controls.phone.hasError('maxlength')) {
+              <span class="form-error">Phone cannot exceed 20 characters.</span>
+            }
+          </div>
+
+          <div class="form-actions">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="companyForm.invalid || companyForm.pristine || saving"
+            >
+              {{ saving ? 'Saving…' : 'Save Changes' }}
+            </button>
+            <button type="button" class="btn btn-outline" (click)="cancelEdit()" [disabled]="saving">
+              Cancel
+            </button>
+          </div>
+        </form>
+      }
+    </section>
   </div>
 } @else {
-  <app-empty-state title="Profile unavailable" message="Sign in to view your profile."></app-empty-state>
+  <app-empty-state title="Profile unavailable" message="Sign in as a supplier to view your profile."></app-empty-state>
 }

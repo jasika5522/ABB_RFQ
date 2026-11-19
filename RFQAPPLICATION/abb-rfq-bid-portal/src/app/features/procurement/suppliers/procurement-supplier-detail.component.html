@@ -1,0 +1,80 @@
+<app-page-header
+  [title]="supplier?.companyName ?? 'Supplier details'"
+  [breadcrumbs]="[
+    { label: 'Procurement', route: '/procurement/dashboard' },
+    { label: 'Suppliers', route: '/procurement/suppliers' },
+    { label: 'Details' }
+  ]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading supplier…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (successMessage) {
+  <div class="success-banner" role="status">{{ successMessage }}</div>
+}
+
+@if (actionError) {
+  <div class="error-banner" role="alert">{{ actionError }}</div>
+}
+
+@if (supplier) {
+  <section class="card">
+    <dl class="meta-grid">
+      <dt>Company</dt>
+      <dd>{{ supplier.companyName }}</dd>
+      <dt>Registration number</dt>
+      <dd>{{ supplier.registrationNumber }}</dd>
+      <dt>Contact person</dt>
+      <dd>{{ supplier.contactPerson || '—' }}</dd>
+      <dt>Phone</dt>
+      <dd>{{ supplier.phone || '—' }}</dd>
+      <dt>User</dt>
+      <dd>{{ supplier.userFullName }} ({{ supplier.userEmail }})</dd>
+      <dt>User active</dt>
+      <dd>{{ supplier.userIsActive ? 'Yes' : 'No' }}</dd>
+      <dt>Approval status</dt>
+      <dd><span [class]="statusClass(supplier.approvalStatus)">{{ supplier.approvalStatus }}</span></dd>
+      <dt>Registered</dt>
+      <dd>{{ supplier.createdAt | date: 'medium' }}</dd>
+    </dl>
+  </section>
+
+  <section class="card actions-section">
+    <h2>Approval actions</h2>
+  @if (confirmAction === 'Approved') {
+    <p>Approve <strong>{{ supplier.companyName }}</strong>? They will be able to bid on published rounds.</p>
+    <div class="actions">
+      <button type="button" class="btn btn-primary" (click)="confirmStatusChange()" [disabled]="actionBusy">
+        {{ actionBusy ? 'Saving…' : 'Confirm approve' }}
+      </button>
+      <button type="button" class="btn btn-outline" (click)="cancelConfirm()" [disabled]="actionBusy">Cancel</button>
+    </div>
+  } @else if (confirmAction === 'Suspended') {
+    <p>Suspend <strong>{{ supplier.companyName }}</strong>? They will not be able to submit bids.</p>
+    <div class="actions">
+      <button type="button" class="btn btn-danger" (click)="confirmStatusChange()" [disabled]="actionBusy">
+        {{ actionBusy ? 'Saving…' : 'Confirm suspend' }}
+      </button>
+      <button type="button" class="btn btn-outline" (click)="cancelConfirm()" [disabled]="actionBusy">Cancel</button>
+    </div>
+  } @else {
+    @if (canApprove) {
+      <button type="button" class="btn btn-primary" (click)="startApprove()">Approve supplier</button>
+    }
+    @if (canSuspend) {
+      <button type="button" class="btn btn-danger" (click)="startSuspend()">Suspend supplier</button>
+    }
+    @if (!canApprove && !canSuspend) {
+      <p class="hint">No status change available for {{ supplier.approvalStatus }} suppliers.</p>
+    }
+  }
+  </section>
+}
+
+<a class="btn btn-outline" routerLink="/procurement/suppliers">Back to list</a>

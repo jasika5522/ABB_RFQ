@@ -1,7 +1,12 @@
 <app-page-header title="Supplier Dashboard"></app-page-header>
 
-<div class="stats-grid">
-  @for (stat of stats; track stat.label) {
-    <app-stat-card [label]="stat.label" [value]="stat.value"></app-stat-card>
+<div class="nav-grid">
+  @for (link of links; track link.route) {
+    <app-nav-card
+      [title]="link.title"
+      [description]="link.description"
+      [route]="link.route"
+      linkLabel="Open"
+    />
   }
 </div>

@@ -1,0 +1,50 @@
+<app-page-header
+  title="Award details"
+  [breadcrumbs]="[
+    { label: 'Approver', route: '/approver/dashboard' },
+    { label: 'Awards', route: '/approver/awards' },
+    { label: 'Details' }
+  ]"
+></app-page-header>
+
+@if (loading) {
+  <p class="loading" role="status">Loading award…</p>
+}
+
+@if (loadError) {
+  <div class="error-banner" role="alert">{{ loadError }}</div>
+}
+
+@if (!loading && !loadError && notAwarded) {
+  <section class="card">
+    <h2>No award issued</h2>
+    <p>No award has been issued for this RFQ yet. After evaluation is approved and a unique lowest bid exists, you can create an award from Evaluation Review.</p>
+  </section>
+}
+
+@if (award) {
+  <section class="card">
+    <dl class="meta-grid">
+      <dt>Award ID</dt>
+      <dd>{{ award.awardId }}</dd>
+      <dt>RFQ</dt>
+      <dd>{{ award.rfqNumber }} — {{ award.rfqTitle }}</dd>
+      <dt>Round</dt>
+      <dd>{{ award.roundNumber }}</dd>
+      <dt>Supplier</dt>
+      <dd>{{ award.companyName }} ({{ award.registrationNumber }})</dd>
+      <dt>Winning bid</dt>
+      <dd>{{ award.bidId }}</dd>
+      <dt>Total price</dt>
+      <dd>{{ award.awardedBidTotalPrice | currency: award.currencyCode : 'symbol' : '1.2-2' }}</dd>
+      <dt>Awarded by (user ID)</dt>
+      <dd>{{ award.awardedBy }}</dd>
+      <dt>Awarded at</dt>
+      <dd>{{ award.awardedAt | date: 'medium' }}</dd>
+      <dt>Comment</dt>
+      <dd>{{ award.awardComment }}</dd>
+    </dl>
+  </section>
+}
+
+<a class="btn btn-outline" routerLink="/approver/awards">Back to awards</a>
