@@ -135,18 +135,7 @@ public class BidRepository : IBidRepository
                 throw new ApiException("The bidding round is not published.", StatusCodes.Status400BadRequest);
             }
 
-            var deadlineValid = await connection.ExecuteScalarAsync<bool>(
-                new CommandDefinition(
-                    """
-                    SELECT @Deadline > CURRENT_TIMESTAMP
-                    FROM rfq_rounds
-                    WHERE round_id = @RoundId AND rfq_id = @RfqId
-                    """,
-                    new { roundContext.Deadline, RfqId = rfqId, RoundId = roundId },
-                    transaction,
-                    cancellationToken: cancellationToken));
-
-            if (!deadlineValid)
+            if (!BidDeadlineRules.IsBiddingOpen(roundContext.Deadline, DateTimeOffset.UtcNow))
             {
                 await transaction.RollbackAsync(cancellationToken);
                 throw new ApiException("The bidding deadline has passed.", StatusCodes.Status400BadRequest);
@@ -296,14 +285,7 @@ public class BidRepository : IBidRepository
                 throw new ApiException("The RFQ round is no longer open for withdrawal.", StatusCodes.Status400BadRequest);
             }
 
-            var deadlineValid = await connection.ExecuteScalarAsync<bool>(
-                new CommandDefinition(
-                    "SELECT @Deadline > CURRENT_TIMESTAMP",
-                    new { bidRow.Deadline },
-                    transaction,
-                    cancellationToken: cancellationToken));
-
-            if (!deadlineValid)
+            if (!BidDeadlineRules.IsBiddingOpen(bidRow.Deadline, DateTimeOffset.UtcNow))
             {
                 await transaction.RollbackAsync(cancellationToken);
                 throw new ApiException("The bidding deadline has passed.", StatusCodes.Status400BadRequest);

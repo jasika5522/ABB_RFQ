@@ -1,474 +1,644 @@
 # ABB Supplier RFQ and Bidding Portal
 
-Full-stack procurement portal: ASP.NET Core Web API (Dapper + PostgreSQL + JWT) and Angular frontend.
+## Table of contents
 
-## Repository layout
+1. [Project introduction](#project-introduction)
+2. [Technology stack](#technology-stack)
+3. [Application architecture](#application-architecture)
+4. [User roles and permissions](#user-roles-and-permissions)
+5. [Complete business workflow](#complete-business-workflow)
+6. [Business rules](#business-rules)
+7. [Database design](#database-design)
+8. [Project structure](#project-structure)
+9. [Prerequisites](#prerequisites)
+10. [Database setup](#database-setup)
+11. [Backend setup](#backend-setup)
+12. [Angular setup](#angular-setup)
+13. [Configuration](#configuration)
+14. [API documentation](#api-documentation)
+15. [Automated testing](#automated-testing)
+16. [Demo credentials](#demo-credentials-local-development-only)
+17. [Known limitations](#known-limitations)
+18. [AI assistance](#ai-assistance)
 
-| Path | Description |
-|------|-------------|
-| `RFQAPI/` | ASP.NET Core Web API (`RFQAPI.slnx`, project `RFQAPI/RFQAPI/`) |
-| `database/` | PostgreSQL scripts — see [database/README.md](database/README.md) |
+---
 
-## Technology
+## Project introduction
 
-- **Backend:** C# / ASP.NET Core 9 Web API, Dapper, Npgsql, JWT, Swagger (Swashbuckle)
-- **Password hashing:** BCrypt (`BCrypt.Net-Next`)
-- **Frontend:** Angular (CORS: `http://localhost:4200`)
-- **Database:** PostgreSQL (scripts in `database/`; server may be on another machine)
+### Project name
 
-**Architecture:** Controller → Service → Repository → PostgreSQL (no Entity Framework, no Docker).
+**ABB Supplier RFQ and Bidding Portal**
 
-## NuGet packages (API)
+### Problem statement
 
-| Package | Purpose |
-|---------|---------|
-| `Dapper` | Data access |
-| `Npgsql` | PostgreSQL driver |
-| `Microsoft.AspNetCore.Authentication.JwtBearer` | JWT authentication |
-| `BCrypt.Net-Next` | Password hashing |
-| `Swashbuckle.AspNetCore` | Swagger UI |
+Procurement teams need a controlled way to publish requests for quotation (RFQs), collect structured supplier bids against mandatory line items, evaluate offers fairly after deadlines, resolve tied lowest prices, and award contracts—with a full audit trail and strict confidentiality of bid amounts before evaluation.
+
+### Project objective
+
+Deliver an end-to-end prototype where:
+
+- **Suppliers** register, get approved, and bid on published rounds.
+- **Procurement Officers** manage RFQs, rounds, supplier approval, evaluation, and audit review.
+- **Approvers** confirm evaluation outcomes (including tie rejection) and issue awards.
+
+### Main features
+
+- JWT-authenticated REST API (ASP.NET Core 9) with role-based access control.
+- PostgreSQL schema with Dapper data access, transactions, and ranking function `get_ranked_bids`.
+- Angular 17 SPA with role-based routes, guards, and JWT HTTP interceptor.
+- Bid evaluation with `RANK()` tie handling and approver decision workflow.
+- Award management with mandatory award comment.
+- Read-only audit log APIs for procurement and approver roles.
+- xUnit automated tests (14 cases) for deadline, duplicate bid, validation, and authorization rules.
+
+---
+
+## Technology stack
+
+| Layer | Technology | Version / notes |
+|-------|------------|-----------------|
+| API runtime | ASP.NET Core Web API | **.NET 9** (`net9.0`) |
+| Language | C# | Latest for .NET 9 |
+| Frontend | Angular | **17.3.x** (standalone components) |
+| Frontend language | TypeScript | Via Angular toolchain |
+| Database | PostgreSQL | Schema in `database/schema.sql` |
+| Data access | Dapper + Npgsql | Dapper 2.1.x, Npgsql 9.0.x |
+| Auth | JWT Bearer | `Microsoft.AspNetCore.Authentication.JwtBearer` 9.0 |
+| API docs | Swagger (Swashbuckle) | 7.2.x |
+| Password hashing | BCrypt | `BCrypt.Net-Next` 4.0.3 |
+| Unit tests | xUnit | 2.9.x, Moq, `Microsoft.AspNetCore.Mvc.Testing` 9.0 |
+
+---
+
+## Application architecture
+
+The system follows a classic layered design. The Angular SPA calls JSON REST endpoints; the API enforces authentication and business rules before persisting data in PostgreSQL.
+
+```mermaid
+flowchart LR
+    subgraph Frontend
+        A[Angular 17 SPA]
+        A1[Route guards]
+        A2[JWT interceptor]
+        A --> A1
+        A --> A2
+    end
+
+    subgraph API["ASP.NET Core Web API"]
+        C[Controllers]
+        S[Services]
+        R[Repositories]
+        M[Middleware / Helpers]
+        C --> S --> R
+        C --> M
+    end
+
+    DB[(PostgreSQL)]
+
+    A -->|HTTPS + Bearer JWT| C
+    R -->|Dapper + Npgsql| DB
+```
+
+### Layer responsibilities
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Angular (presentation)** | Login, registration, role dashboards, RFQ/bid/evaluation/award UIs, client validation, loading and error states. |
+| **Controllers** | HTTP routing, authorization attributes, model binding, status codes, Swagger metadata. |
+| **Services** | Business validation, orchestration, mapping entities to DTOs, throwing `ApiException` with correct HTTP semantics. |
+| **Repositories** | Parameterized SQL, transactions, calling `get_ranked_bids`, audit inserts in the same transaction where required. |
+| **PostgreSQL** | Relational integrity, partial unique indexes, ranking function, persistent audit and evaluation results. |
+
+**Dependency injection:** Repositories and services are registered as scoped services in `Program.cs`; `DapperContext` provides connections. JWT settings bind from configuration via `IOptions<JwtSettings>`.
+
+---
+
+## User roles and permissions
+
+Verified against API `[Authorize]` attributes on controllers (Suppliers cannot call procurement endpoints; suppliers have no access to evaluation or audit APIs).
+
+### Supplier
+
+| Capability | API / UI |
+|------------|----------|
+| Register and log in | `POST /api/auth/register`, `POST /api/auth/login`; `/register`, `/login` |
+| Manage supplier profile | `GET/PUT /api/suppliers/me`; `/supplier/profile` |
+| View open RFQs (approved only) | `GET /api/supplier/rfqs`, `GET /api/supplier/rfqs/{rfqId}`; `/supplier/rfqs` |
+| Submit bid | `POST /api/rfqs/{rfqId}/rounds/{roundId}/bids` |
+| Withdraw bid | `PATCH /api/bids/{bidId}/withdraw` |
+| View own bidding history | `GET /api/bids/me`, `GET /api/bids/{bidId}`; `/supplier/my-bids` |
+
+Suppliers **cannot** access evaluation results, other suppliers’ bids, audit logs, or RFQ management APIs (**403**).
+
+### Procurement Officer
+
+| Capability | API / UI |
+|------------|----------|
+| Create and edit draft RFQs | `POST/PUT /api/rfqs` |
+| View RFQs and rounds | `GET /api/rfqs`, `GET /api/rfqs/{id}`, `GET /api/rfqs/{id}/rounds` |
+| Create, publish, close rounds | `POST .../rounds`, `PATCH .../publish`, `PATCH .../close` |
+| Review and approve/suspend suppliers | `GET /api/suppliers`, `PATCH /api/suppliers/{id}/status` |
+| Evaluate closed rounds | `POST .../evaluate` |
+| View evaluation results (after evaluate) | `GET .../evaluation`, `GET .../evaluation/{bidId}` |
+| View awards | `GET /api/rfqs/{rfqId}/award`, `GET /api/awards` |
+| Audit history | `GET /api/audit-logs` and related; `/audit-logs` |
+
+Procurement Officers **cannot** submit bids, submit approver decisions, or create awards. They **do not** have an API to read raw supplier bids before evaluation—only post-evaluation ranking data.
+
+### Approver
+
+| Capability | API / UI |
+|------------|----------|
+| View RFQs (read-only) | `GET /api/rfqs*` (no create/update) |
+| View suppliers (read-only) | `GET /api/suppliers*` (no status PATCH) |
+| View evaluation results | `GET .../evaluation`, `GET .../evaluation/{bidId}` |
+| Approve or reject evaluation | `POST .../evaluation/decision` |
+| Create award | `POST /api/rfqs/{rfqId}/rounds/{roundId}/award` |
+| List awards | `GET /api/awards`, `GET /api/rfqs/{rfqId}/award` |
+| Manage user active flag | `GET /api/users`, `PATCH /api/users/{id}/active` |
+| Audit history | Same audit endpoints as PO; `/audit-logs` |
+
+**Note:** In the Angular app, `/approver/rfqs` is a **placeholder** screen—not a full RFQ browser (see [Known limitations](#known-limitations)).
+
+---
+
+## Complete business workflow
+
+```mermaid
+flowchart TD
+    A[Supplier registers] --> B[PO approves supplier]
+    B --> C[PO creates draft RFQ + items]
+    C --> D[PO creates Round 1]
+    D --> E[PO publishes round]
+    E --> F[Approved suppliers view RFQ]
+    F --> G[Suppliers submit bids]
+    G --> H{Withdraw / resubmit?}
+    H -->|Before deadline| G
+    H --> I[PO closes round]
+    I --> J[PO evaluates bids]
+    J --> K[System ranks by total price]
+    K --> L[Approver reviews evaluation]
+    L --> M{Lowest rank unique?}
+    M -->|Yes| N[Approver approves evaluation]
+    N --> O[Approver awards bid]
+    M -->|Tie at rank 1| P[Approver rejects with reason]
+    P --> Q[PO creates next round]
+    Q --> E
+```
+
+### Step-by-step lifecycle
+
+1. Supplier self-registers (`Pending` approval).
+2. Procurement Officer approves the supplier (`Approved`).
+3. PO creates an RFQ in **Draft** with one or more line items.
+4. All RFQ items are mandatory for bidders (no optional lines in schema).
+5. PO creates **Round 1** with a future **deadline**.
+6. PO **publishes** the round (RFQ becomes **Published**).
+7. Approved suppliers list and open published RFQs.
+8. Suppliers submit bids (all lines, positive unit prices).
+9. Suppliers may **withdraw** and **submit a new bid** in the same round before the deadline; withdrawn rows remain in history.
+10. PO **closes** the round (manual step; deadline also blocks late bids).
+11. PO runs **evaluate** on a **Closed** round.
+12. System computes `SUM(quantity × unit_price)` and persists ranks via `get_ranked_bids` / `bid_evaluations`.
+13. Approver reviews rankings and tie flag (`isLowestRankTied`).
+14. Approver **approves** if exactly one lowest rank, or **rejects** with mandatory reason on a tie.
+15. After **rejection**, PO may create a **subsequent round** (RFQ must be **Evaluated** per round rules).
+16. After **approval**, Approver **awards** the chosen rank-1 bid; RFQ becomes **Awarded**.
+
+### Evaluation approval vs final award
+
+| Step | Actor | Meaning |
+|------|-------|---------|
+| **Evaluation** | Procurement Officer | Computes ranks and stores `bid_evaluations`; RFQ/round → **Evaluated**. |
+| **Evaluation decision (Approved)** | Approver | Confirms a **unique** lowest bid is acceptable; recorded in `audit_log`; enables award. |
+| **Evaluation decision (Rejected)** | Approver | Tied lowest rank; reason required; **no award**; triggers new round workflow. |
+| **Award** | Approver | Creates the single `awards` row for the RFQ, with mandatory `awardComment`; RFQ → **Awarded**. |
+
+Award does **not** auto-select a winner—the Approver sends explicit `bidId`. Rank 2 is never auto-awarded on a tie.
+
+---
+
+## Business rules
+
+| Rule | Implementation |
+|------|----------------|
+| Only **Approved** suppliers can bid | `BidRepository.SubmitAsync` checks `suppliers.approval_status` inside transaction (**403** if not approved). |
+| All RFQ items mandatory | `BidService.ValidateAndNormalizeItems` requires every `rfq_item_id`. |
+| Unit prices **> 0** | Service validation + `chk_bid_item_price` in DB. |
+| No bids after deadline | `BidDeadlineRules.IsBiddingOpen` — strict `deadline > UtcNow` (equal instant closed). |
+| One **active** bid per supplier per round | Partial unique index `ux_active_supplier_rfq_round`; duplicate → **409**. |
+| Withdrawn bids kept | `status = 'Withdrawn'` + `withdrawn_at`; not deleted. |
+| Bid total | `SUM(rfq_items.quantity * bid_items.unit_price)` in `get_ranked_bids`. |
+| Equal totals, equal rank | PostgreSQL `RANK() OVER (ORDER BY total_price ASC)`. |
+| No auto-award on tie | Approver must **reject**; new round required. |
+| Award needs approved evaluation + unique rank 1 | `AwardRepository` validates audit `EvaluationApproved` and recomputed rank. |
+| Audit on important actions | `AuditLogHelper.InsertAsync` in same transaction as bid/RFQ/supplier/award writes. |
+
+---
+
+## Database design
+
+### Entity-relationship diagram
+
+```mermaid
+erDiagram
+    users {
+        bigint user_id PK
+        varchar email UK
+        varchar role
+        text password_hash
+    }
+    suppliers {
+        bigint supplier_id PK
+        bigint user_id FK,UK
+        varchar approval_status
+    }
+    rfqs {
+        bigint rfq_id PK
+        varchar rfq_number UK
+        bigint created_by FK
+        varchar status
+        char currency_code
+    }
+    rfq_items {
+        bigint rfq_item_id PK
+        bigint rfq_id FK
+    }
+    rfq_rounds {
+        bigint round_id PK
+        bigint rfq_id FK
+        int round_number
+        varchar status
+        timestamptz deadline
+    }
+    bids {
+        bigint bid_id PK
+        bigint rfq_id FK
+        bigint round_id FK
+        bigint supplier_id FK
+        varchar status
+    }
+    bid_items {
+        bigint bid_item_id PK
+        bigint bid_id FK
+        bigint rfq_item_id FK
+        numeric unit_price
+    }
+    bid_evaluations {
+        bigint evaluation_id PK
+        bigint bid_id FK,UK
+        int rank_position
+        numeric total_price
+    }
+    awards {
+        bigint award_id PK
+        bigint rfq_id FK,UK
+        bigint bid_id FK,UK
+    }
+    audit_log {
+        bigint audit_id PK
+        bigint user_id FK
+        jsonb old_values
+        jsonb new_values
+    }
+
+    users ||--o| suppliers : user_id
+    users ||--o{ rfqs : created_by
+    users ||--o{ bid_evaluations : evaluated_by
+    users ||--o{ awards : awarded_by
+    users ||--o{ audit_log : user_id
+    rfqs ||--|{ rfq_items : rfq_id
+    rfqs ||--|{ rfq_rounds : rfq_id
+    rfqs ||--o| awards : rfq_id
+    rfq_rounds ||--o{ bids : round_id_rfq_id
+    suppliers ||--o{ bids : supplier_id
+    bids ||--|{ bid_items : bid_id_rfq_id
+    rfq_items ||--o{ bid_items : rfq_item_id_rfq_id
+    bids ||--o| bid_evaluations : bid_id
+    bids ||--o| awards : bid_id
+```
+
+### Notable constraints and indexes
+
+- **`ux_users_email`** — case-insensitive unique email.
+- **`ux_one_published_round_per_rfq`** — at most one `Published` round per RFQ.
+- **`ux_active_supplier_rfq_round`** — partial unique on `(rfq_id, round_id, supplier_id)` where `status <> 'Withdrawn'`.
+- **Composite FKs** — e.g. `bids(round_id, rfq_id)` → `rfq_rounds`; `bid_items(bid_id, rfq_id)` → `bids`; prevents cross-RFQ data corruption.
+- **`get_ranked_bids(p_rfq_id, p_round_id)`** — returns `bid_id`, `supplier_id`, `total_price`, `rank_position` for `Submitted` bids only.
+
+See [database/README.md](database/README.md) and [database/schema.sql](database/schema.sql) for full DDL.
+
+---
+
+## Project structure
+
+```
+ABB/
+├── README.md
+├── DESIGN_DECISIONS.md
+├── PROJECT_WALKTHROUGH.md
+├── database/
+│   ├── schema.sql
+│   ├── verify.sql
+│   └── README.md
+├── RFQAPI/
+│   ├── RFQAPI.slnx
+│   ├── RFQAPI/
+│   │   ├── Controllers/
+│   │   ├── DAL/
+│   │   ├── Helpers/
+│   │   ├── Middleware/
+│   │   ├── Models/
+│   │   ├── Properties/
+│   │   ├── Repositories/
+│   │   │   ├── Implementations/
+│   │   │   └── Interfaces/
+│   │   ├── Services/
+│   │   │   ├── Implementations/
+│   │   │   └── Interfaces/
+│   │   ├── Program.cs
+│   │   └── RFQAPI.csproj
+│   └── RFQAPI.Tests/
+│       ├── BidDeadlineRulesTests.cs
+│       ├── BidServiceValidationAndDuplicateTests.cs
+│       ├── BidVisibilityAndAuthorizationTests.cs
+│       └── RFQAPI.Tests.csproj
+├── RFQAPPLICATION/
+│   └── abb-rfq-bid-portal/
+│       └── src/app/
+│           ├── core/          # guards, interceptors, services, models
+│           ├── features/      # auth, dashboards, supplier, procurement, approver, audit-logs
+│           └── shared/        # layout, navigation, shared components
+└── tools/                   # PowerShell workflow helpers (optional)
+```
+
+---
 
 ## Prerequisites
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download) (project targets `net9.0`)
-- PostgreSQL with schema applied (when testing against a real database)
-- Node.js / Angular CLI (frontend, later)
+| Tool | Purpose |
+|------|---------|
+| [.NET 9 SDK](https://dotnet.microsoft.com/download) | Build and run API, run xUnit tests |
+| [Node.js](https://nodejs.org/) 18+ and npm | Angular dependencies |
+| [Angular CLI](https://angular.io/) 17.x | Optional; `npm start` uses local CLI |
+| PostgreSQL 14+ (typical) | Application database |
+| Git | Source control |
 
-## Configuration
+---
 
-### Connection string
+## Database setup
 
-`RFQAPI/RFQAPI/appsettings.json`:
+1. Install PostgreSQL and create an empty database (e.g. `abb_hackathon`).
+2. On a **fresh** database only, apply the schema:
 
-```json
-"ConnectionStrings": {
-  "RfqDb": "Host=<host>;Port=5432;Database=abb_hackathon;Username=<user>;Password=<secret>;"
-}
-```
+   ```bash
+   psql -h <host> -U <user> -d abb_hackathon -f database/schema.sql
+   ```
 
-Override the password via environment variables or User Secrets — do not commit production credentials.
+3. Verify:
 
-### JWT
+   ```bash
+   psql -h <host> -U <user> -d abb_hackathon -f database/verify.sql
+   ```
 
-`appsettings.json` defines issuer, audience, and expiration. The **signing key must be at least 32 characters** and must not be committed for production.
+   Expect **10 tables** and the `get_ranked_bids` function (see [database/README.md](database/README.md)).
 
-**Option A – User Secrets (recommended):**
+### Warning: existing databases
 
-```bash
-cd RFQAPI/RFQAPI
-dotnet user-secrets init
-dotnet user-secrets set "Jwt:Key" "YourSecretKey_MustBeAtLeast32Characters!"
-```
+`schema.sql` is intended for **initial** provisioning. **Do not** blindly re-run it on a database that already contains RFQs, bids, or awards—it can fail on existing objects or destroy data if you drop objects manually.
 
-**Option B – Development only:** `appsettings.Development.json` (gitignored) may set `Jwt:Key` for local runs.
+### Procurement Officer and Approver users
 
-```json
-"Jwt": {
-  "Issuer": "RFQAPI",
-  "Audience": "RFQAPI",
-  "Key": "<from secrets>",
-  "ExpirationMinutes": 60
-}
-```
+The public API only **registers Suppliers**. Internal **ProcurementOfficer** and **Approver** accounts must be inserted or updated directly in the `users` table (BCrypt password hash). The repository does not ship a SQL seed file; development environments typically already contain users such as those in [Demo credentials](#demo-credentials-local-development-only).
 
-## Run the API
+---
+
+## Backend setup
+
+**Working directory:** `RFQAPI/RFQAPI`
 
 ```bash
 cd RFQAPI/RFQAPI
 dotnet restore
-dotnet run
+dotnet user-secrets set "Jwt:Key" "<your-local-signing-key-at-least-32-chars>"
+dotnet build
+dotnet run --launch-profile http
 ```
 
-- HTTP: `http://localhost:5013`
-- HTTPS: `https://localhost:7061`
-- Swagger: `http://localhost:5013/swagger` (Development)
+| Item | Value |
+|------|--------|
+| HTTP URL | `http://localhost:5013` |
+| Swagger | `http://localhost:5013/swagger` (Development) |
+| HTTPS profile | `https://localhost:7061` (optional `launch-profile https`) |
 
-## Module 1 – Authentication and user management
+Solution build (API + tests):
 
-### Endpoints
+```bash
+cd RFQAPI
+dotnet build RFQAPI.slnx
+```
 
-| Method | Route | Auth | Description |
+---
+
+## Angular setup
+
+**Working directory:** `RFQAPPLICATION/abb-rfq-bid-portal`
+
+```bash
+cd RFQAPPLICATION/abb-rfq-bid-portal
+npm install
+npm run build
+npm start
+```
+
+| Item | Value |
+|------|--------|
+| Dev server | `http://localhost:4200` |
+| API CORS | Allows `http://localhost:4200` |
+
+Configure the API base URL in the Angular environment/settings if your API host differs from `http://localhost:5013`.
+
+---
+
+## Configuration
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `ConnectionStrings:RfqDb` | Yes | PostgreSQL connection (host, port, database, username, password). |
+| `Jwt:Key` | Yes | Symmetric signing key, **minimum 32 characters** (User Secrets or environment variable). |
+| `Jwt:Issuer` | Yes | Default `RFQAPI` in `appsettings.json`. |
+| `Jwt:Audience` | Yes | Default `RFQAPI`. |
+| `Jwt:ExpirationMinutes` | Yes | Token lifetime (default 60). |
+
+**Never commit real passwords or JWT keys.** Use:
+
+```bash
+cd RFQAPI/RFQAPI
+dotnet user-secrets set "ConnectionStrings:RfqDb" "Host=...;Port=5432;Database=...;Username=...;Password=..."
+dotnet user-secrets set "Jwt:Key" "YourLocalDevelopmentKey_Minimum32Characters"
+```
+
+---
+
+## API documentation
+
+Base path: `/api`. All secured endpoints expect `Authorization: Bearer <token>` unless noted.
+
+### Authentication and users
+
+| Method | Route | Role | Description |
 |--------|-------|------|-------------|
-| `POST` | `/api/auth/register` | None | Supplier self-registration: creates `users` + `suppliers` (`Pending`) in one transaction |
-| `POST` | `/api/auth/login` | None | Login; returns JWT + user profile |
-| `GET` | `/api/users/me` | Bearer | Current user profile |
-| `GET` | `/api/users?page=1&pageSize=20` | Bearer, **Approver** | Paginated user list |
-| `PATCH` | `/api/users/{id}/active` | Bearer, **Approver** | Activate/deactivate user |
+| POST | `/api/auth/register` | Anonymous | Supplier registration (user + supplier, `Pending`). |
+| POST | `/api/auth/login` | Anonymous | Returns JWT and user profile. |
+| GET | `/api/users/me` | Any authenticated | Current user. |
+| GET | `/api/users` | Approver | Paginated users. |
+| PATCH | `/api/users/{id}/active` | Approver | Activate/deactivate user. |
 
-ProcurementOfficer and Approver accounts are **not** created via API; seed or insert manually in PostgreSQL.
+### Supplier management
 
-### Sample requests
-
-**Register**
-
-```http
-POST /api/auth/register
-Content-Type: application/json
-
-{
-  "fullName": "Jane Doe",
-  "email": "supplier@example.com",
-  "password": "Password123!",
-  "companyName": "Acme Supplies Ltd",
-  "registrationNumber": "REG-10001",
-  "contactPerson": "Jane Doe",
-  "phone": "+15551234567"
-}
-```
-
-**Response (201):** `user` and `supplier` objects — no password hash. Supplier `approvalStatus` is `Pending`.
-
-**Login**
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "supplier@example.com",
-  "password": "Password123!"
-}
-```
-
-**Response (200):**
-
-```json
-{
-  "token": "<jwt>",
-  "expiresAt": "2026-11-18T18:00:00Z",
-  "user": { "userId": 1, "fullName": "...", "email": "...", "role": "Supplier", "isActive": true, "createdAt": "..." }
-}
-```
-
-**Get me**
-
-```http
-GET /api/users/me
-Authorization: Bearer <token>
-```
-
-**List users (Approver)**
-
-```http
-GET /api/users?page=1&pageSize=20
-Authorization: Bearer <approver-token>
-```
-
-**Deactivate user (Approver)**
-
-```http
-PATCH /api/users/2/active
-Authorization: Bearer <approver-token>
-Content-Type: application/json
-
-{ "isActive": false }
-```
-
-Cannot deactivate your own account (`400`).
-
-### HTTP status codes (Module 1)
-
-| Code | When |
-|------|------|
-| 200 | Success |
-| 201 | Registered |
-| 400 | Validation / bad request / self-deactivate |
-| 401 | Invalid login, inactive account, or missing/invalid JWT |
-| 403 | Wrong role (e.g. Supplier calling `/api/users`) |
-| 404 | User not found |
-| 409 | Duplicate email or registration number |
-| 500 | Unexpected server error (no internal details in body) |
-
-## Module 2 – Supplier management
-
-### Business rules
-
-- Registration creates a supplier with `approval_status = Pending`.
-- Only **Approved** suppliers may bid (enforced in Module 5).
-- Suppliers may update **company name**, **contact person**, and **phone** only — not registration number or approval status.
-- Procurement Officers review suppliers: **Approved** or **Suspended** only (not back to **Pending**).
-
-### Endpoints
-
-| Method | Route | Auth | Description |
+| Method | Route | Role | Description |
 |--------|-------|------|-------------|
-| `GET` | `/api/suppliers/me` | Bearer, **Supplier** | Own supplier profile |
-| `PUT` | `/api/suppliers/me` | Bearer, **Supplier** | Update own profile |
-| `GET` | `/api/suppliers` | Bearer, **ProcurementOfficer** or **Approver** | Paginated list; optional `approvalStatus`, `companyName` (partial match) |
-| `GET` | `/api/suppliers/{supplierId}` | Bearer, **ProcurementOfficer** or **Approver** | Supplier + linked user details (no password) |
-| `PATCH` | `/api/suppliers/{supplierId}/status` | Bearer, **ProcurementOfficer** | Set `Approved` or `Suspended`; writes `audit_log` in same DB transaction |
+| GET | `/api/suppliers/me` | Supplier | Own supplier profile. |
+| PUT | `/api/suppliers/me` | Supplier | Update company/contact fields. |
+| GET | `/api/suppliers` | PO, Approver | Paginated supplier list. |
+| GET | `/api/suppliers/{supplierId}` | PO, Approver | Supplier detail with user info. |
+| PATCH | `/api/suppliers/{supplierId}/status` | PO | `Approved` or `Suspended`. |
 
-Default page size: **20**; maximum: **100**.
+### RFQ management
 
-**Review supplier (ProcurementOfficer)**
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| POST | `/api/rfqs` | PO | Create draft RFQ + items. |
+| PUT | `/api/rfqs/{rfqId}` | PO | Update draft RFQ. |
+| GET | `/api/rfqs` | PO, Approver | Paginated RFQ list. |
+| GET | `/api/rfqs/{rfqId}` | PO, Approver | RFQ detail with items. |
 
-```http
-PATCH /api/suppliers/1/status
-Authorization: Bearer <po-token>
-Content-Type: application/json
+### RFQ rounds
 
-{ "approvalStatus": "Approved" }
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| POST | `/api/rfqs/{rfqId}/rounds` | PO | Create round with deadline. |
+| PATCH | `/api/rfqs/{rfqId}/rounds/{roundId}/publish` | PO | Publish draft round. |
+| PATCH | `/api/rfqs/{rfqId}/rounds/{roundId}/close` | PO | Close published round. |
+| GET | `/api/rfqs/{rfqId}/rounds` | PO, Approver | List rounds. |
+| GET | `/api/rfqs/{rfqId}/rounds/{roundId}` | PO, Approver | Round detail. |
+
+### Supplier RFQ listing
+
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| GET | `/api/supplier/rfqs` | Supplier | Published RFQs available to bid. |
+| GET | `/api/supplier/rfqs/{rfqId}` | Supplier | RFQ detail + eligibility for active round. |
+
+### Bid management
+
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| POST | `/api/rfqs/{rfqId}/rounds/{roundId}/bids` | Supplier | Submit bid. |
+| GET | `/api/bids/me` | Supplier | Paginated own bids. |
+| GET | `/api/bids/{bidId}` | Supplier | Own bid detail (scoped by supplier). |
+| PATCH | `/api/bids/{bidId}/withdraw` | Supplier | Withdraw before deadline. |
+
+### Evaluation and ranking
+
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| POST | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluate` | PO | Evaluate closed round. |
+| GET | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation` | PO, Approver | Evaluation results. |
+| GET | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation/{bidId}` | PO, Approver | Bid-level evaluation detail. |
+
+### Approver decisions
+
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| POST | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation/decision` | Approver | `Approved` or `Rejected` (+ reason if rejected). |
+| GET | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation/decision` | PO, Approver | Current decision status. |
+
+### Awards
+
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| POST | `/api/rfqs/{rfqId}/rounds/{roundId}/award` | Approver | Create award with `bidId` and comment. |
+| GET | `/api/rfqs/{rfqId}/award` | PO, Approver | Award for RFQ. |
+| GET | `/api/awards` | PO, Approver | Paginated awards list. |
+
+### Audit logs
+
+| Method | Route | Role | Description |
+|--------|-------|------|-------------|
+| GET | `/api/audit-logs` | PO, Approver | Filtered, paginated audit log. |
+| GET | `/api/audit-logs/entity/{entityType}/{entityId}` | PO, Approver | History for one entity. |
+| GET | `/api/audit-logs/{auditId}` | PO, Approver | Single audit entry. |
+
+Interactive exploration: Swagger at `http://localhost:5013/swagger`.
+
+---
+
+## Automated testing
+
+| Item | Detail |
+|------|--------|
+| Project | `RFQAPI/RFQAPI.Tests/RFQAPI.Tests.csproj` |
+| Framework | xUnit, Moq, `Microsoft.AspNetCore.Mvc.Testing` |
+| Database | **No** PostgreSQL integration tests; auth integration tests use in-memory JWT configuration |
+
+**Run tests:**
+
+```bash
+cd RFQAPI
+dotnet test RFQAPI.Tests/RFQAPI.Tests.csproj
 ```
 
-Audit row: `action = SupplierStatusUpdated`, `entity_type = Supplier`, `old_values` / `new_values` JSON with `approval_status`.
+**Last verified result:** 14 passed, 0 failed, 0 skipped.
 
-### HTTP status codes (Module 2)
+### Test cases and rules covered
 
-| Code | When |
-|------|------|
-| 404 | Supplier profile not found |
-| 400 | Invalid status (e.g. `Pending`), invalid pagination, invalid ID |
-| 409 | Duplicate registration number on register |
+| Test name | Validates |
+|-----------|-----------|
+| `IsBiddingOpen_WhenDeadlineIsAfterNow_ReturnsTrue` | Bidding allowed before deadline |
+| `IsBiddingOpen_WhenDeadlineIsBeforeNow_ReturnsFalse` | Late bidding blocked |
+| `IsBiddingOpen_WhenDeadlineEqualsNow_ReturnsFalse_StrictFutureRule` | Deadline exactly now is closed |
+| `SubmitAsync_WhenDuplicateActiveBidInRound_Throws409Conflict` | One active bid per round |
+| `SubmitAsync_AfterWithdrawal_AllowsSecondSubmitWhenRepositorySucceeds` | Withdraw + resubmit |
+| `SubmitAsync_DifferentSuppliers_CanBothSubmitWhenRepositoryAllows` | Different suppliers, same round |
+| `SubmitAsync_WhenUnitPriceNotPositive_Throws400` | Positive unit prices |
+| `SubmitAsync_WhenNotAllRfqItemsQuoted_Throws400` | All items mandatory |
+| `GetMyBidDetailAsync_WhenBidBelongsToAnotherSupplier_Returns404NotFound` | Supplier bid isolation |
+| `GetMyBids_WithoutAuthentication_Returns401` | Anonymous rejected |
+| `GetMyBids_WithProcurementOfficerRole_Returns403` | PO cannot use supplier bid API |
+| `SubmitBid_WithProcurementOfficerRole_Returns403` | PO cannot submit bids |
+| `GetEvaluation_WithSupplierRole_Returns403` | Supplier cannot see evaluation |
+| `BidEndpoints_AreRestrictedToSupplierRoleOnly` | `BidsController` role attribute |
 
-## Module 3 – RFQ management (draft workflow)
+---
 
-### Business rules
+## Demo credentials (local development only)
 
-- **ProcurementOfficer** creates and edits RFQs; **Approver** can view only (no edit in this module).
-- Suppliers cannot call these endpoints.
-- New RFQs start as **Draft**; edit allowed only in **Draft** and only by the **creating** officer.
-- RFQ number is immutable after create; at least **one item** required; currency is 3-letter ISO-style (`currency_code`).
-- All line items are treated as mandatory (no `is_mandatory` column). Rounds, bids, and publish are **not** in this module.
+**Not for production.** Used in local dev DB and referenced by `tools/*.ps1` scripts. There is **no** checked-in SQL seed file; accounts must exist in your database.
 
-### Endpoints
+| Role | Email | Password |
+|------|-------|----------|
+| Procurement Officer | `po.m12@example.com` | `Password123!` |
+| Approver | `approver.m12@example.com` | `Password123!` |
+| Supplier | *(register via UI/API)* | e.g. `Password123!` |
 
-| Method | Route | Auth | Description |
-|--------|-------|------|-------------|
-| `POST` | `/api/rfqs` | **ProcurementOfficer** | Create draft RFQ + items (transaction + audit) |
-| `PUT` | `/api/rfqs/{rfqId}` | **ProcurementOfficer** | Update draft RFQ; replace items (transaction + audit) |
-| `GET` | `/api/rfqs/{rfqId}` | **ProcurementOfficer**, **Approver** | RFQ detail with all items |
-| `GET` | `/api/rfqs` | **ProcurementOfficer**, **Approver** | Paginated summary; optional `status`, `rfqNumber`, `title` filters |
+After supplier registration, a PO must set `approvalStatus` to `Approved` before bidding.
 
-Default page size **20**, max **100**. List responses omit line items.
+---
 
-**Create sample**
+## Known limitations
 
-```http
-POST /api/rfqs
-Authorization: Bearer <po-token>
-Content-Type: application/json
+- **No OTP / MFA** in the codebase.
+- **No email or SMS notifications** for RFQ publish or award.
+- **No repository SQL seed script** for PO/Approver users (manual DB provisioning).
+- **xUnit tests** do not hit PostgreSQL (constraints like `ux_active_supplier_rfq_round` are covered in schema + manual testing).
+- **Approver Angular route** `/approver/rfqs` is a placeholder component, not a full RFQ module.
+- **Production hardening** (vault secrets, horizontal scaling, CI browser tests) not implemented in this prototype.
 
-{
-  "rfqNumber": "RFQ-2026-001",
-  "title": "Industrial Motors Procurement",
-  "currencyCode": "USD",
-  "items": [
-    { "itemName": "3-Phase Motor 5HP", "quantity": 25, "unit": "EA" },
-    { "itemName": "VFD 5HP", "quantity": 25, "unit": "EA" }
-  ]
-}
-```
+---
 
-Audit actions: `RfqCreated`, `RfqUpdated` on entity type `Rfq` (same transaction as RFQ writes).
+## AI assistance
 
-### HTTP status codes (Module 3)
+[Cursor AI](https://cursor.com) assisted with implementation, refactoring, documentation, and xUnit test authoring. Outputs were validated through code review, `dotnet build`, `dotnet test` (14 tests), `ng build`, Swagger/API checks, manual end-to-end workflow testing, and PowerShell helpers under `tools/`.
 
-| Code | When |
-|------|------|
-| 201 | RFQ created |
-| 400 | Validation, non-draft update, wrong creator |
-| 404 | RFQ not found |
-| 409 | Duplicate `rfq_number` |
-
-## Module 4 – RFQ round management
-
-### Round lifecycle
-
-| Step | Round status | RFQ status |
-|------|--------------|------------|
-| Create round 1 | `Draft` | `Draft` (unchanged) |
-| Publish | `Published` | `Published` |
-| Close (manual) | `Closed` | `Closed` |
-| Evaluate (Module 6) | `Evaluated` | `Evaluated` |
-| Create next round | new `Draft` | must be `Evaluated` + prior round `Evaluated` |
-| Publish next round | `Published` | `Published` again |
-
-No background jobs; Module 5 enforces deadlines even if the round is not manually closed.
-
-### Endpoints
-
-| Method | Route | Auth | Description |
-|--------|-------|------|-------------|
-| `POST` | `/api/rfqs/{rfqId}/rounds` | **ProcurementOfficer** | Create round (`deadline` only; auto `round_number`) |
-| `PATCH` | `/api/rfqs/{rfqId}/rounds/{roundId}/publish` | **ProcurementOfficer** | Publish draft round |
-| `PATCH` | `/api/rfqs/{rfqId}/rounds/{roundId}/close` | **ProcurementOfficer** | Close published round |
-| `GET` | `/api/rfqs/{rfqId}/rounds` | **ProcurementOfficer**, **Approver** | All rounds by `round_number` |
-| `GET` | `/api/rfqs/{rfqId}/rounds/{roundId}` | **ProcurementOfficer**, **Approver** | Single round |
-
-Audit: `RfqRoundCreated`, `RfqRoundPublished`, `RfqRoundClosed` (entity `RfqRound`) in the same transaction as status changes.
-
-### HTTP status codes (Module 4)
-
-| Code | When |
-|------|------|
-| 201 | Round created |
-| 400 | Past deadline, wrong RFQ/round state, publish/close invalid |
-| 404 | RFQ or round not found / mismatch |
-| 409 | Concurrent duplicate `round_number` or second published round |
-
-## Module 5 – Bid management (suppliers)
-
-### Rules
-
-- **Approved** suppliers only; RFQ and round must be **Published**.
-- Bidding allowed only while **`deadline > CURRENT_TIMESTAMP`** in PostgreSQL (even if the round was not manually closed).
-- Quote **every** RFQ line; unit price **> 0**; currency is the RFQ’s `currency_code` (not sent in the request).
-- One **active** bid per supplier per round (`ux_active_supplier_rfq_round`); withdrawn bids are kept; resubmit creates a **new** bid row.
-- No rankings or totals stored here (Module 6).
-
-### Endpoints (Supplier only)
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| `POST` | `/api/rfqs/{rfqId}/rounds/{roundId}/bids` | Submit bid + line prices |
-| `PATCH` | `/api/bids/{bidId}/withdraw` | Withdraw before deadline |
-| `GET` | `/api/bids/me` | Paginated own bids; optional `rfqId`, `status` |
-| `GET` | `/api/bids/{bidId}` | Own bid detail + line items |
-
-Audit: `BidSubmitted`, `BidWithdrawn` (entity `Bid`) in the same transaction as bid writes.
-
-### HTTP status codes (Module 5)
-
-| Code | When |
-|------|------|
-| 201 | Bid created |
-| 400 | Validation, deadline, wrong RFQ/round/bid status |
-| 403 | Supplier not approved |
-| 404 | No profile / RFQ-round / bid (no cross-supplier leakage) |
-| 409 | Active bid already exists |
-
-## Module 6 – Bid evaluation and ranking
-
-### Rules
-
-- **ProcurementOfficer** runs evaluation; **PO** and **Approver** view results (suppliers **403**).
-- RFQ and round must be **Closed** (manual close in Module 4).
-- Only **`Submitted`** bids; withdrawn bids excluded.
-- Totals: `SUM(rfq_items.quantity × bid_items.unit_price)` via existing `get_ranked_bids()`.
-- Ranking: PostgreSQL `RANK() OVER (ORDER BY total_price ASC)` — equal totals share rank (e.g. 1, 1, 3).
-- **`isLowestRankTied`** when multiple bids share rank 1 — no auto-award; Module 7 handles ties.
-- Persists `bid_evaluations`; sets RFQ and round to **Evaluated**.
-
-### Endpoints
-
-| Method | Route | Auth |
-|--------|-------|------|
-| `POST` | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluate` | ProcurementOfficer |
-| `GET` | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation` | PO, Approver |
-| `GET` | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation/{bidId}` | PO, Approver |
-
-Audit: `RfqRoundEvaluated` on entity `RfqRound` (same transaction).
-
-### HTTP status codes (Module 6)
-
-| Code | When |
-|------|------|
-| 200 | Evaluation completed / results returned |
-| 400 | Not closed, no bids, incomplete bid lines |
-| 404 | RFQ/round/bid or evaluation missing |
-| 409 | Round already evaluated |
-
-## Module 7 – Approver review and tie resolution
-
-Decisions are stored in **`audit_log`** only (no new tables): `EvaluationApproved` / `EvaluationRejected` on entity `RfqRound`.
-
-### Workflow
-
-| Scenario | Approver action | RFQ / round status | Next step |
-|----------|-----------------|--------------------|-----------|
-| Unique lowest rank | `Approved` | Stay **Evaluated** | Module 8 award |
-| Tied lowest rank | `Rejected` + reason | Stay **Evaluated** | PO creates next round (Module 4) |
-
-- **Approve** only when exactly one bid has the lowest rank.
-- **Reject** only when multiple bids share the lowest rank (reason required).
-- No awards, no bid `Accepted`/`Rejected` in this module.
-
-### Endpoints
-
-| Method | Route | Auth |
-|--------|-------|------|
-| `POST` | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation/decision` | **Approver** |
-| `GET` | `/api/rfqs/{rfqId}/rounds/{roundId}/evaluation/decision` | PO, Approver |
-
-GET returns `status: "Pending"` when evaluation exists but no decision yet. Duplicate decision → **409** (transaction + round lock).
-
-### Module 4 integration
-
-After **Rejected**, RFQ and latest round remain **Evaluated** — matches Module 4 rules for creating the next round. **No Module 4 code changes.**
-
-## Module 8 – Award management
-
-### Rules
-
-- **Approver** creates award; explicit `bidId` in request (no auto-selection).
-- Requires **`EvaluationApproved`** audit for that round; **Rejected** or **Pending** → **400**.
-- RFQ + round must be **Evaluated**; bid must be **Submitted**, rank **1**, **unique** lowest rank (recomputed from `bid_evaluations`).
-- One award per RFQ (`awards.rfq_id` unique); RFQ → **Awarded**; round stays **Evaluated**.
-- Bid statuses are not changed to Accepted/Rejected.
-
-### Endpoints
-
-| Method | Route | Auth |
-|--------|-------|------|
-| `POST` | `/api/rfqs/{rfqId}/rounds/{roundId}/award` | Approver |
-| `GET` | `/api/rfqs/{rfqId}/award` | PO, Approver |
-| `GET` | `/api/awards` | PO, Approver (paginated; `rfqNumber`, `companyName` filters) |
-
-Audit: `RfqAwarded` on entity **Rfq** (same transaction as insert).
-
-## Module 9 – Audit log retrieval (read-only)
-
-**ProcurementOfficer** and **Approver** only. Suppliers receive **403**.
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| `GET` | `/api/audit-logs` | Paginated list with optional filters |
-| `GET` | `/api/audit-logs/{auditId}` | Single record |
-| `GET` | `/api/audit-logs/entity/{entityType}/{entityId}` | Entity history (paginated) |
-
-**Query parameters (list):** `page` (default 1), `pageSize` (default 10, max 100), `action`, `entityType`, `entityId`, `userId`, `fromDate`, `toDate`.
-
-- Sort: `created_at DESC`.
-- `fromDate` / `toDate` are interpreted as **UTC** `DateTimeOffset` values.
-- Response includes `totalCount` and `totalPages`.
-- Actor: `users` join (`fullName`, `email` only); `user_id` null → `actor` null.
-- `old_values` / `new_values` returned as JSON objects (`JsonElement`).
-
-Uses existing indexes `ix_audit_entity` and `ix_audit_user_created`. No write/update/delete endpoints.
-
-### Testing when PostgreSQL is available
-
-1. Run [database/schema.sql](database/schema.sql) on the target database.
-2. Point `RfqDb` at that host.
-3. Set `Jwt:Key` (User Secrets).
-4. `dotnet run` and open Swagger.
-5. **Register** a supplier → **Login** → **GET /api/suppliers/me** and **GET /api/users/me**.
-6. **ProcurementOfficer testing:** set role in SQL, then **GET /api/suppliers** and **PATCH .../status**.
-7. **Approver testing:** insert or update a user in SQL, for example:
-
-   ```sql
-   UPDATE users SET role = 'Approver' WHERE email = 'supplier@example.com';
-   ```
-
-   Log in again to get a token with the `Approver` role, then test `GET /api/users` and `PATCH .../active`.
-
-**Note:** Database operations are implemented against the schema in `database/schema.sql` but have **not** been integration-tested in this environment (PostgreSQL on another laptop).
-
-## Database setup
-
-See [database/README.md](database/README.md), [database/schema.sql](database/schema.sql), and [database/verify.sql](database/verify.sql).
-
-## Implementation status
-
-| Module | Status |
-|--------|--------|
-| Database scripts | Ready |
-| Module 1 – Auth & users | **Implemented** (compile verified; DB test pending) |
-| Module 2 – Suppliers | **Implemented** (compile verified; DB test pending) |
-| Module 3 – RFQs | **Implemented** (compile verified; DB test pending) |
-| Module 4 – Rounds | **Implemented** (compile verified; DB test pending) |
-| Module 5 – Bids | **Implemented** (compile verified; DB test pending) |
-| Module 6 – Evaluation | **Implemented** (compile verified; DB test pending) |
-| Module 7 – Approval / ties | **Implemented** (compile verified; DB test pending) |
-| Module 8 – Awards | **Implemented** (compile verified; DB test pending) |
-| Module 9 – Audit retrieval | **Implemented** (compile verified; DB test pending) |
+For interview-oriented narrative and demo scripts, see [PROJECT_WALKTHROUGH.md](PROJECT_WALKTHROUGH.md). For design rationale, see [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md).
